@@ -71,8 +71,8 @@ Two packets carry a battery code. The top three bits of the byte are the code (`
 
 | Packet | Byte | Fixed low bits | When it's sent |
 |---|---|---|---|
-| Link info `00 0f 00 f0 …` | 17 | `00011` | on connect (a presence inquiry gets it back, but the value doesn't change while connected) |
-| Status `00 00 00 13 XX` (and `00 00 00 17 XX`) | 4 | `00010` | sporadically while connected |
+| Link info `00 0f 00 f0 …` | 17 | `00011` (wheel: `00111`) | on connect (a presence inquiry gets it back, but the value doesn't change while connected) |
+| Status `00 00 00 13 XX` (and `00 00 00 17 XX`) | 4 | `00010` (wheel: `00110`) | sporadically while connected |
 
 Observed codes, from resets at each voltage (sweep 2, 3.0 V down to 2.1 V):
 
@@ -87,11 +87,97 @@ Observed codes, from resets at each voltage (sweep 2, 3.0 V down to 2.1 V):
 - The low-battery flash rate changes between 2.1 and 2.3 V while the code stays at 1. Flash rate isn't in these packets, so it can't be read from the protocol.
 - The first sweep (falling, no resets) gave values that don't fit this table: `c0` at 2.35 V, `3c` at 2.4–2.45 V, and code 1 at 2.4 V. Pad history or hysteresis probably explains them, but that isn't shown yet.
 - Codes are only refreshed on connect (link) or sporadically (status), so a live bar would lag. A 4-bar display should treat the link byte as a connect-time snapshot.
+- `00 00 00 40` reads the battery register on demand, and controllers answer with the status packet too (see the register reads under Racing wheel). The daemon sends it every 5 minutes. Whether the answer tracks the voltage live, or repeats the connect-time value, hasn't been tested yet.
+- The racing wheel sends `e7` (link) and `e6` (status): code 7 with bit 2 set. It's set on AC with the batteries out and on batteries alone, so it isn't a power-source flag. It may just mark the wheel. The parser ignores it.
 - Not yet explained: `c0` and `3c` (low bits don't match the table), and the exact full/medium boundary between 2.6 and 2.7 V.
 - SDL's HIDAPI Xbox 360 wireless driver reads these same bytes (link byte 17, status byte 4) and sends no battery request. It maps the value to four buckets, but its 0–255 thresholds don't match the codes we see. [SDL source](https://github.com/libsdl-org/SDL/blob/a8780c6a287bb97549ec4411cff7ade560db441f/src/joystick/hidapi/SDL_hidapi_xbox360w.c)
 
 ### Racing wheel (Xbox 360 Wireless Racing Wheel, WRW01)
-Not captured yet. Microsoft's patent US 8,117,364 names this wheel and describes its
+Captured in `captures/wheel-probe-2026-10-14.log` (on AC with the batteries out, then on batteries):
+- Link info matches a controller's except byte 25: `82` for the wheel, `01` for a controller.
+  The low bits match XInput's wheel subtype (`02`); what the `80` bit means isn't known.
+- The battery byte has bit 2 set (see Battery above).
+- Gamepad reports use the controller layout: steering is LX (bytes 10–11, about −32560 to
+  +32648 lock to lock), the brake is LT (byte 8), the accelerator RT (byte 9), both 0–255.
+  The paddles are LB/RB, and the other buttons use the usual bits.
+- The wheel sent `00 f8 02` once after connecting (see Unknown).
+- The rumble packet `00 01 0f c0 00 LL RR` reaches two rumble motors in the wheel, but the
+  bytes are swapped compared with a controller: `LL` drives a small, high-pitched motor and
+  `RR` a big, deep one. 25% (`40`) on one motor alone isn't felt; 50% is. Rumble never
+  turned or stiffened the rim (steering stayed at +0 with a hand resting on it), so the
+  steering motor needs other packets.
+- On AC, the motor runs a default autocentre with no packets from the host: the rim springs
+  back to centre, and plugging the AC in re-centres it. On batteries the rim stays wherever
+  it's left.
+- The wheel sends `00 05 00 …` packets that controllers don't (the `00 05` header is new):
+  - Plugging the AC in: `00 05 00 80 f1 10 7f 28 7f 0c 12 02`, repeated about every 200 ms as
+    `f1`, `71`, `f1`, `71`, then `f5`. Byte 4's top bit flips on each repeat, like the patent's
+    toggle bit, so these may be reports waiting for an acknowledgement we never send.
+  - When the dump tool took over from the daemon: `00 05 00 f0 00 12 3f ff ff ff ff ff … ff ff
+    07 01` and `00 05 00 80 71 10 7f 28 7f 0c 12 02` in pairs, every 2 s, four times.
+  - Unplugging the AC sent `00 00 00 80 00…`, then the status packet.
+  - The LED command (`08 42`) and `08 50` each make the wheel send the pair
+    `00 05 00 f0 00 12 3f ff ff ff ff ff 00… ff ff 07 01` + `00 05 00 80 [71|f1] 10 7f 28 7f 0c
+    12 02` four times, 2 s apart, starting within about 3 s. Controllers never send it
+    (earlier captures have LED commands and no `00 05`). It looks like a state or capability
+    report after an LED change; `08 5x` may be more LED patterns. During a sweep the probe pins
+    it on a later step, so time it with a single send.
+  - In the first class-8 sweep, while the wheel was unassigned (all four lights flashing),
+    the ring went dark around the time of that report. With the wheel showing player 1, the
+    same sweep changed nothing visible.
+- Classes 0–2 are **register reads**. The wheel ignores the low 6 bits of byte 3; the
+  register number is (byte 2 & 3) << 2 | byte 3 >> 6, and the reply is `00 00 00 [reg]X YY`.
+  These are the same pairs the link-info packet carries in bytes 14–25.
+
+  | Command | Reply | Register |
+  |---|---|---|
+  | `00 00 00 00` | `00 00 00 00 03` | 0 |
+  | `00 00 00 40` | `00 00 00 13 e6` | 1, battery (the "status" packet) |
+  | `00 00 00 80` | `00 00 00 20 1d` | 2 |
+  | `00 00 00 c0` | `00 00 00 30 03` | 3 |
+  | `00 00 01 00` | `00 00 00 40 01` | 4 |
+  | `00 00 01 40` | `00 00 00 50 82` | 5, device type (`01` on a controller) |
+  | `00 00 02 00` | `00 00 00 80 71` / `f1` (toggles) | 8 |
+  | `00 00 02 40` | `00 05 00 f0 00 11 02 00…` | 9 |
+  | `00 00 02 80` | `00 05 00 f0 00 12 3f ff ff ff ff ff … ff ff 07 01` | 10 |
+
+  Registers 6, 7 and 11–15 (`01 80`, `01 c0`, `02 c0`, `03 xx`) don't answer, and classes 4–7
+  draw no reply. None of classes 0–7 moved the rim (2048 commands, weight on, wheel assigned).
+- Class `0b` (`00 00 0b xx`) **controls the steering motor**. Found by hanging a weight on the
+  rim so the autocentre held it off-centre; the rim swings toward the weight when the motor
+  lets go. Register 8 echoes the state after writes below `40` (bit 7 toggles each time).
+  - `0b 02` motor off (reg 8 `f1` → `d1`, bit `20` cleared); `0b 04` motor on (bit `20`
+    set). Bit 3 of the write doesn't matter (`0a`/`0c` do the same).
+  - `0b 10` motor off too, clearing bit `40` instead; `0b 20` sets it again. `0b 05` sets
+    bit `02` (`f3`); its meaning isn't known. The motor runs only with bits `40` and `20`
+    both set. The pattern isn't fully decoded: `0b 14` turned the motor on although the
+    next reply (`b3`) showed bit `40` clear.
+  - `0b 40 | n` (n = 0–31) sets a strength, probably the autocentre spring's: `40`–`43`
+    limp, rising from `44`; `5f` nearly matches the default. Holding values for 5 s each
+    (`40`, `5f`, `48`, `54`, `40`) gave settled positions of −28700, −15300, −22400,
+    −22400, −26100, so the rim moved back toward the weight when the value dropped. Rim
+    friction hides small steps (`48` → `54` didn't move it).
+  - `0b 60 | n`: also strength-like (limp at `60`–`67`, rising from `68`). Its difference
+    from `4x` isn't known.
+  - `0b 80`–`ff`: no visible change after `82`; saturated or ignored.
+  - No class-`0b` write pushed the rim sideways. Writes `40` and up get no reply.
+  - In the full classes 9–f sweep, the wheel stopped sending input reports at some point in
+    classes 9 or `0a` (the motor still toggled during `0b`). Register reads still worked; a
+    power cycle restored it. Which write did it is unknown.
+- Payload packets (`docs/probes/04-payloads.txt`, motor on, weight on): no movement. Some
+  reset the wheel, which disconnects and reconnects within about 2 s with its LED cleared:
+  about `00 07 0f c0` with payload A, `00 09 0f c0` with payload B, and `00 06 0f c0` with
+  payload C (the probe's attribution can lag a step). The reset depends on the payload, so
+  the wheel parses these packets.
+- `00 01 08 c0` **powers the wheel off**, just like `00 00 08 c0`. The probe parser now
+  refuses any `00 xx 08 c0`.
+- Class 8 (`00 00 08 xx`, all values except `4x` and `c0`) has no force-feedback command:
+  with the wheel assigned and a weight pulling the rim off-centre, none of them moved it or
+  changed the autocentre.
+- The wheel can rejoin on a different slot after a power cycle (it moved from slot 1 to slot
+  0 when slot 0 was free). Check the `08 80` connect line before sending to a slot.
+
+Microsoft's patent US 8,117,364 names this wheel and describes its
 force-feedback protocol in general terms:
 - The host uploads effect blocks and parameter blocks into the wheel's memory, then sends
   short start/stop, gain and device-control commands. The wheel plays effects by itself.

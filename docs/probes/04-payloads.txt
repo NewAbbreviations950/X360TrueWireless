@@ -11,5 +11,6 @@ say payload type sweep, B
 00 {02..1f} 0f c0 01 01 01 01 ff 80 00 01
 say payload type sweep, C
 00 {02..1f} 0f c0 40 40 40 40 40 40 40 40
-say rumble-type payload in other classes and commands
-00 01 {00..0e} {c0..c3} 00 40 40 00 00 00 00 00
+say rumble-type payload in other classes and commands (class 8 has power off, so skip it)
+00 01 {00..07} {c0..c3} 00 40 40 00 00 00 00 00
+00 01 {09..0e} {c0..c3} 00 40 40 00 00 00 00 00

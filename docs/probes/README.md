@@ -38,11 +38,22 @@ PROBE slot0 [12/240] 00 00 08 0c 00 00 00 00 00 00 00 00  steering +3  0 new
 - Plug in the AC adapter; force feedback needs it. **Pulling the adapter is the kill switch.**
 - Keep your hands off the rim during sweeps, and keep the wheel clamped so it can't fall
   over if the motor kicks.
-- Scripts start with low strengths (`40` ≈ 25%), and power off (`00 00 08 c0`) is never sent.
-  Unknown commands could still unpair the wheel; if it won't reconnect, re-sync it with
-  the receiver's button.
+- Scripts start with low strengths (`40` ≈ 25%). The parser refuses any `00 xx 08 c0`: that's
+  power off, and the wheel obeys it with byte 1 set too. Unknown commands could still unpair
+  the wheel; if it won't reconnect, re-sync it with the receiver's button.
+- `00 00 0b 02` turns the wheel's motor off. Use it as a `stop` packet in scripts that might
+  start a force.
+- Some payload packets reset the wheel (see `docs/protocol.md`). It reconnects by itself, but
+  its LED is cleared, so set the player again (`<slot> 00 00 08 42 00 00 00 00 00 00 00 00`).
+- After a power cycle the wheel may join a different slot. Check the `08 80` line first.
+- With the wheel's default autocentre, hang a weight from the rim so it rests off-centre.
+  Then a probe also sees commands that weaken or switch off the spring.
 
-## Tonight's order
+Results so far (2026-10-14) are in `docs/protocol.md` under Racing wheel. Short version:
+classes 0–2 are register reads, `0b` controls the motor (on/off and a strength), and nothing
+has pushed the rim sideways yet.
+
+## First session's order
 1. **Identify the wheel (phase 0).** With the dump tool running and no probe, connect the
    wheel, then turn the rim fully left, fully right, and press each pedal. In the log:
    - the link-info packet `00 0f 00 f0 …` (compare its bytes with a normal controller's to

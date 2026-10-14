@@ -66,8 +66,15 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 - **Headset audio:** the odd-numbered interfaces (protocol 0x82, interrupt endpoints) carry
   the headset. The format is undocumented. Research it, then expose a PipeWire sink and
   source.
-- **Unknown packets:** `00 f8 0N` (seen while the chatpad wasn't handshaked). The `00 0f`
-  link-info packet is only partly known: byte 17 is the battery, and the rest is unexplained.
+  - No headset on hand yet (expected in a few weeks). The racing wheel has a headset jack too.
+  - First test once it's here: read registers 0–4 (`docs/protocol.md`, register reads) on the
+    controller and the wheel with the headset unplugged and plugged in. Register 0 reads `20`
+    on a controller with the chatpad and `03` on the wheel, so it may be an attachment field.
+  - The dump tool only reads the controller interfaces; make it log the audio endpoints too,
+    so traffic there shows up during probes.
+- **Unknown packets:** `00 f8 0N` (seen while the chatpad wasn't handshaked, and once from the
+  wheel). The `00 0f` link-info packet carries register/value pairs (see the register reads in
+  `docs/protocol.md`); only the battery (register 1) and device type (register 5) are known.
 - **Non-ASCII chatpad legends** (€, š, ¨, «, »): these work only if the layout can type
   them. A compose/Unicode fallback could cover the rest.
 - **Packaging extras:** aarch64 builds, AUR/OBS packages, maybe a Flatpak for the GUI only.
@@ -78,9 +85,20 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
     The daemon can expose a slot as a joystick-style virtual wheel
     (`X360CHATPAD_WHEEL_SLOTS`) that accepts every evdev effect type and logs it
     (`X360CHATPAD_FF_LOG`). Effects are normalised in `crates/daemon/src/ffb.rs`.
-  - Next: identify the wheel from link info, find its force-feedback packets with the probes,
-    then write the encoder (`ffb::Op` → packets) and trim the advertised effect types to
-    what the wheel plays. If the probes find nothing, rethink before building more.
+  - Found (2026-10-14, details in `docs/protocol.md`): link info identifies the wheel
+    (register 5 = `82`); classes 0–2 are register reads; `00 00 0b xx` switches the motor
+    on/off (`02`/`04`) and sets a spring strength (`40`–`5f`, also `60`–`7f`); rumble
+    reaches two motors with the bytes swapped. Header-only classes 0–8 and `0b` have no
+    sideways force. Some payload packets reset the wheel.
+  - Next:
+    - Calibrate `0b 4x`/`6x` with a better rig than a hanging weight (pull the rim to a fixed
+      angle and feel or measure the return force), and find what `6x` adds over `4x`.
+    - Find which class-9/`0a` write stops input reports, and the write that restores them.
+    - Sweep classes `0d`–`0f` (not reached yet), and re-run the end of `04-payloads.txt`.
+    - Look for directional force: payload packets on class `0b` (`00 01 0b xx` + payload),
+      and the payload types that reset the wheel, with other payloads.
+    - Then write the encoder (`ffb::Op` → packets). Even spring strength and on/off alone
+      would give games a centring force.
 
 ## Architecture decisions (from the initial plan)
 - Rust. The daemon runs as a systemd **user** service, so it works in Steam Deck game

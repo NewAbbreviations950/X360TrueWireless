@@ -291,11 +291,18 @@ impl Probe {
                     number().with_context(context)?,
                 ))),
                 "say" => probe.steps.push_back(Step::Say(rest.trim().to_owned())),
-                "stop" => probe.stop.push(pad(
-                    parse_hex(rest.split_whitespace()).with_context(context)?
-                )),
+                "stop" => {
+                    let packet = pad(parse_hex(rest.split_whitespace()).with_context(context)?);
+                    if is_power_off(&packet) {
+                        bail!("{}: would power the controller off", context());
+                    }
+                    probe.stop.push(packet)
+                }
                 _ => {
                     for packet in expand(line).with_context(context)? {
+                        if is_power_off(&packet) {
+                            bail!("{}: would power the controller off", context());
+                        }
                         probe.steps.push_back(Step::Send(packet));
                         probe.total += 1;
                     }
@@ -445,6 +452,11 @@ fn is_routine(d: &[u8]) -> bool {
     )
 }
 
+/// `08 c0` is power off. The wheel also obeys it with byte 1 set (`00 01 08 c0`).
+fn is_power_off(packet: &[u8]) -> bool {
+    matches!(packet, [0x00, _, 0x08, 0xc0, ..])
+}
+
 fn pad(mut packet: Vec<u8>) -> Vec<u8> {
     if packet.len() < PACKET_LEN {
         packet.resize(PACKET_LEN, 0);
@@ -577,12 +589,12 @@ mod tests {
     fn parses_settings_and_steps() {
         let probe = Probe::parse(
             "t",
-            "# header\nsettle 100\naxis 12\nstop 00 00 08 c0\nsay hi\n00 00 {08..09} 00 # two\nwait 50\n",
+            "# header\nsettle 100\naxis 12\nstop 00 00 0b 02\nsay hi\n00 00 {08..09} 00 # two\nwait 50\n",
         )
         .unwrap();
         assert_eq!(probe.settle, Duration::from_millis(100));
         assert_eq!(probe.axis, 12);
-        assert_eq!(probe.stop, [pad(vec![0, 0, 8, 0xc0])]);
+        assert_eq!(probe.stop, [pad(vec![0, 0, 0x0b, 0x02])]);
         assert_eq!(probe.total, 2);
         assert_eq!(probe.steps.len(), 4);
         assert_eq!(probe.steps[0], Step::Say("hi".into()));
@@ -599,17 +611,18 @@ mod tests {
                 let script = std::fs::read_to_string(&path).unwrap();
                 let probe = Probe::parse(&path.display().to_string(), &script).unwrap();
                 assert!(probe.total > 0, "{}", path.display());
-                // Never power the controller off mid-sweep.
-                let off = pad(vec![0x00, 0x00, 0x08, 0xc0]);
-                assert!(
-                    !probe.steps.contains(&Step::Send(off)),
-                    "{}",
-                    path.display()
-                );
                 scripts += 1;
             }
         }
         assert!(scripts >= 5);
+    }
+
+    #[test]
+    fn refuses_to_power_off() {
+        for script in ["00 00 08 c0", "00 01 {00..0e} c0", "stop 00 01 08 c0"] {
+            assert!(Probe::parse("t", script).is_err(), "{script}");
+        }
+        assert!(Probe::parse("t", "00 00 08 {c1..c2}").is_ok());
     }
 
     fn gamepad(steering: i16) -> Vec<u8> {

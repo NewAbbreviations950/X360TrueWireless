@@ -171,12 +171,13 @@ pub fn parse(data: &[u8]) -> InPacket {
             })),
             _ => InPacket::Other,
         },
-        // Link info: byte 17 is the battery code; its low five bits are always `00011`.
-        [0x00, 0x0f, 0x00, 0xf0, ..] if data.len() >= 18 && data[17] & 0x1f == 0x03 => {
+        // Link info: byte 17 is the battery code; its low bits are `00011`, or `00111` from the
+        // racing wheel (bit 2 is ignored, see `docs/protocol.md`).
+        [0x00, 0x0f, 0x00, 0xf0, ..] if data.len() >= 18 && data[17] & 0x1b == 0x03 => {
             battery(data[17])
         }
-        // Status: byte 4 is the battery code; its low five bits are always `00010`.
-        [0x00, 0x00, 0x00, 0x13 | 0x17, b, ..] if b & 0x1f == 0x02 => battery(*b),
+        // Status: byte 4 is the battery code; its low bits are `00010`, or `00110` from the wheel.
+        [0x00, 0x00, 0x00, 0x13 | 0x17, b, ..] if b & 0x1b == 0x02 => battery(*b),
         _ => InPacket::Other,
     }
 }
@@ -205,6 +206,11 @@ pub mod out {
     /// Ring-of-light animation, using xpad's LED command numbers (2–5 = flash then player 1–4).
     pub const fn led(command: u8) -> Packet {
         packet(0x00, 0x00, 0x08, 0x40 | (command % 0x0e))
+    }
+
+    /// Read the battery register; answered with a status packet (`00 00 00 13 XX`).
+    pub const fn battery_request() -> Packet {
+        packet(0x00, 0x00, 0x00, 0x40)
     }
 
     pub const fn power_off() -> Packet {
@@ -434,6 +440,9 @@ mod tests {
             parse(&hex("00 00 00 17 62 00 00 00")),
             InPacket::Battery(Battery::Low)
         );
+        // The racing wheel sets bit 2, on AC or batteries (captures/wheel-probe-2026-10-14.log).
+        assert_eq!(parse(&link("e7")), InPacket::Battery(Battery::Full));
+        assert_eq!(parse(&status("e6")), InPacket::Battery(Battery::Full));
     }
 
     #[test]

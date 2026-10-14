@@ -29,6 +29,8 @@ use layout::Layout;
 const RECEIVER_IDS: &[(u16, u16)] = &[(0x045e, 0x0719), (0x045e, 0x0291), (0x045e, 0x02a9)];
 const SLOTS: u8 = 4;
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(1);
+/// How often to re-read a connected controller's battery level.
+const BATTERY_REQUEST_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 /// What a connected controller looks like to games.
 enum Controller {
@@ -242,6 +244,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     let mut indicators = indicators::IndicatorSync::default();
     let mut keepalive_phase = false;
     let mut next_keepalive = Instant::now();
+    let mut next_battery_request = Instant::now();
 
     let result = (|| -> Result<()> {
         while shared.running.load(Ordering::SeqCst) {
@@ -265,6 +268,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             send(&mut ep_out, &out::led(2 + slot))?;
                             indicators.reset();
                             next_keepalive = Instant::now();
+                            next_battery_request = Instant::now() + BATTERY_REQUEST_INTERVAL;
                             shared.set_connected(slot, true);
                         }
                         InPacket::Presence { connected: false } if controller.is_some() => {
@@ -334,6 +338,11 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                     }
                 }
                 None => {}
+            }
+            // The link info only gives the battery level at connect time, so ask again now and then.
+            if controller.is_some() && Instant::now() >= next_battery_request {
+                send(&mut ep_out, &out::battery_request())?;
+                next_battery_request = Instant::now() + BATTERY_REQUEST_INTERVAL;
             }
             // Chatpad upkeep; a wheel has no chatpad port.
             if matches!(controller, Some(Controller::Pad(_))) {
