@@ -112,8 +112,11 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       and the other payload types (`00 TT 0f c0`) as a start.
     - Also ruled out: every motor mode (`00 00 0b 00`–`3f`) set before the effect is
       loaded; packets longer than 12 bytes (truncated); other header bytes 0/1.
-    - Next: look for register writes (any packet that changes a register read), in case
-      force feedback has to be enabled through a register.
+    - Also ruled out: register writes in the unused header classes.
+    - Next (from the patent, see `docs/protocol.md`): `kk` = `0b` as the effect operation
+      with its index fields filled in (every earlier `0b` test left them zero), with and
+      without the native autocentre stopped; constant-force bytes at `40`/`c0` in case one
+      is a direction.
     - Then movement tests on the accepted space: the `09` operation and loop fields, duration
       and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
       effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).

@@ -271,6 +271,24 @@ Unattended search on 2026-10-17 (weight on, spring `48`, 6.5 hours, nothing move
   checksum of their first 12 bytes, so the wheel (or receiver) drops the rest.
 - Only `00 01 0f c0` reaches the effect channel: `09` sent with byte 1 = `00`, `02`, `04`–`ff`
   or byte 0 = `01`–`ff` gets no reply.
+- No register writes in classes `03`–`07`, `0a`, `0d`, `0e`: none of `00 00 CC 00`–`ff`, nor
+  `00 01 0C XX` + payload for classes `03`–`07`, changed registers 0–5 or 8 (2026-10-17).
+  Registers 6, 7 and 9–11 don't answer a read.
+
+Reading the patent again (US 8,117,364) gives likely meanings for what's mapped so far:
+- Upstream, the Device State, Block Load and Effect Operation reports each fit in 16 header
+  bits (4-bit identifier, 11 information bits, toggle bit). `9S CC` would be the **Block
+  Load report** (status + checksum), sent after every stored block. `09` draws one too, so
+  the wheel stores `09` as a block rather than acting on it. `kk` = `0b` is the only report
+  type answered with another identifier (`a`), so it's the best candidate for the **Effect
+  Operation command** (an action per effect: no change/stop/start, plus index fields).
+- Register 8 fits the **Device State report**: `80` toggle, `40`/`20` native-effect and motor
+  enable, `10` block pool empty, `08` pool full.
+- Downstream, Device Control and Device Gain are header-only (a 6-bit identifier, 6 control
+  bits, a toggle). That matches `00 00 0b xx`: `0b 40`–`7f` would be the **device gain**
+  (it scales the autocentre, which is the patent's "native effect"), and `0b 00`–`3f`
+  **device control** (enable/disable motors, stop effects, reset, pause/continue the play
+  list, start/stop the native effect).
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
