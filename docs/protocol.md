@@ -251,9 +251,13 @@ Unattended search on 2026-10-17 (weight on, spring `48`, 6.5 hours, nothing move
   effect loaded (`08 01` + `7f`×6), one reset per 256. All were acknowledged with status `0`
   and none was rejected, so `09` doesn't validate these bytes. One reply came back as `9d`,
   but a resend of the same packet gave `90` three times, so it was a radio glitch.
-- `kk` = `0b`'s status depends on bit 0 of each payload byte: any byte `01` gives `a8`, while
-  `00` and `80` give `a0`. Its checksum covers only byte 1 (`0b 01` → `df`, the rest `c0`).
-  It may be a device control (enable actuators, stop all, pause…), so it's mapped next.
+- `kk` = `0b` (all bytes 1–7 swept, 2026-10-17): the status alternates `a0`/`a8` with every
+  packet, whatever it holds, so bit `8` is a sequence toggle. The checksum is `c0` unless
+  byte 1 has bit 0 or 1 set (then `df`); bytes 2–7 never change the reply. So only
+  `0b xx & 3` registers, which fits a small command field (a device control?). Every `0b`
+  value is being tried as a start next.
+- `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
+  with the normal all-bytes checksum.
 
 ### Unknown
 - `00 f8 0N 00…` (N = 1–3): seen while the chatpad was not handshaked and keys were being pressed, and from the wheel when buttons were pressed after `09 41` had stopped its reports. Probably "input happened but isn't being reported".

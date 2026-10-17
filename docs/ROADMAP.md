@@ -113,6 +113,16 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
       effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).
     - Find what `0c` frees (the memory still fills) and what `0b` replies mean.
+    - **Capture a real game instead (parked for now, brute force first).** On hand: an open
+      RGH3 Xbox 360 (phat), a Raspberry Pi Pico and a racing game disc with force feedback.
+      A forum pinout lists USB D+/D− on the front RF module next to its serial (LED/sync)
+      pins ([AnandTech thread](https://forums.anandtech.com/threads/xbox-360-rf-module-on-computer.174013/)).
+      If controller traffic crosses that USB link, a Pico running `usb-sniffer-lite`
+      (full-speed USB sniffer firmware) would capture the console's packets while the game
+      plays force feedback, likely in the same format as the PC receiver. First check that
+      the pins really carry USB. Fallback: a DashLaunch plugin on the RGH console that logs
+      the controller/USB calls. Over the air is out: the RTL-SDR on hand doesn't reach
+      2.4 GHz, and the link is proprietary and may be encrypted.
     - Write the encoder (`ffb::Op` → packets) once forces are found.
   - **Fallback only**, if the search above comes up empty: a centring force from `0b 04`
     (motor on), `0b 02` (off) and `0b 40`–`7f` (strength), which games could scale. Not
