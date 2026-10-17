@@ -106,9 +106,10 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       `02`, `03`, `08` and `09` is done: every value field accepts every value, so the ack
       can't show what's missing. The 2026-10-17 search ruled out every `09` byte 2/3 pair
       with a constant force loaded, and host conditions started with `09 01 01 01`.
-    - Next: map `kk` = `0b` (its status reacts to payload bits, so it may be a device
-      control such as "enable actuators") and `0c`, then movement tests of each `0b` value
-      before and after `09`.
+    - Also ruled out (2026-10-17): every `0b` value around the create and `09`, other
+      indices and block controls, duration/gain/loops, periodic waves and envelopes.
+    - Next: the unacknowledged report types (`kk` = `01`, `06`, `0a`, `0d`–`7f`) as a start
+      with an effect loaded, and `09`/`0a` on the other payload types (`00 TT 0f c0`).
     - Then movement tests on the accepted space: the `09` operation and loop fields, duration
       and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
       effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).

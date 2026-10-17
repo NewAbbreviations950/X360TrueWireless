@@ -255,7 +255,12 @@ Unattended search on 2026-10-17 (weight on, spring `48`, 6.5 hours, nothing move
   packet, whatever it holds, so bit `8` is a sequence toggle. The checksum is `c0` unless
   byte 1 has bit 0 or 1 set (then `df`); bytes 2–7 never change the reply. So only
   `0b xx & 3` registers, which fits a small command field (a device control?). Every `0b`
-  value is being tried as a start next.
+  value was then tried as a start, with no movement (below).
+- Movement tests on 2026-10-17 evening (weight on, spring `48`, reset before each, all
+  acknowledged, none moved): every `0b xx` value sent before the create, between the
+  constant block and `09`, or after `09`; effect indices `02`–`7f` with block control
+  `05`/`06`/`07`; duration × gain × loops (`00`–`ff` × `7f`/`ff` × `00`/`01`/`ff`); the five
+  periodic types with periodic and envelope blocks; constant force with envelopes.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
