@@ -49,9 +49,30 @@ PROBE slot0 [12/240] 00 00 08 0c 00 00 00 00 00 00 00 00  steering +3  0 new
 - With the wheel's default autocentre, hang a weight from the rim so it rests off-centre.
   Then a probe also sees commands that weaken or switch off the spring.
 
-Results so far (2026-10-14) are in `docs/protocol.md` under Racing wheel. Short version:
-classes 0–2 are register reads, `0b` controls the motor (on/off and a strength), and nothing
-has pushed the rim sideways yet.
+Results so far are in `docs/protocol.md` under Racing wheel. Short version: classes 0–2 are
+register reads, `0b` controls the motor (on/off and a strength), and `00 01 0f c0 kk …` is the
+force-feedback channel: the wheel acknowledges and stores effect and parameter blocks
+(2026-10-16), but nothing has pushed the rim sideways yet.
+
+## Scripted sessions (`scripts/`)
+The `p` probe pauses on every reset, and its blame can lag a step, so the 2026-10-16 session
+drove the dump tool from shell scripts instead. Start the tool reading a FIFO:
+```sh
+systemctl --user stop x360chatpad.service
+mkfifo /tmp/wheel.fifo; sleep infinity > /tmp/wheel.fifo &
+./target/debug/x360chatpad-dump < /tmp/wheel.fifo | tee captures/wheel-probe-$(date +%F).log
+```
+Then, with `LOG` (the log), `FIFO` and `SLOT` set:
+- `scripts/oracle.sh <file>` sends one packet per line and prints those that draw a reply.
+  This is the fast way to map force-feedback fields: no rig needed, the acknowledgement
+  status says whether the wheel accepted the packet.
+- `scripts/sweep.sh <file>` runs steps (`packet + packet + …` per line), then reports the
+  steering swing (`!!MOVED` from 1500), resets, and unusual replies. After a reset it waits
+  for the wheel to rejoin and sets the LED and motor again (`SPRING`, default `48`).
+- `scripts/each.sh 09:40 09:41 …` sends header-only commands one at a time, each followed by
+  a motor off/on check that shows whether input reports still arrive (needs the weight).
+Raw sends from the dump tool aren't guarded: only the scripts refuse `00 xx 08 c0`.
+Avoid `00 00 09 41`; it stops input reports until a power cycle.
 
 ## First session's order
 1. **Identify the wheel (phase 0).** With the dump tool running and no probe, connect the

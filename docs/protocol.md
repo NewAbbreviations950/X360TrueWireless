@@ -158,17 +158,27 @@ Captured in `captures/wheel-probe-2026-10-14.log` (on AC with the batteries out,
     −22400, −26100, so the rim moved back toward the weight when the value dropped. Rim
     friction hides small steps (`48` → `54` didn't move it).
   - `0b 60 | n`: also strength-like (limp at `60`–`67`, rising from `68`). Its difference
-    from `4x` isn't known.
-  - `0b 80`–`ff`: no visible change after `82`; saturated or ignored.
+    from `4x` isn't known; `7f` felt the same as `5f`.
+  - `0b 80`–`ff` are ignored: `0b ff` sent on top of a weak `0b 46` left it weak (the rim
+    stopped at the same ±5000 short of centre).
+  - The spring has no centre offset: after `5f`, `7f`, `80` and `c0`, the rim returned to
+    within ±200 of centre from both locks (2026-10-16, weight off).
   - No class-`0b` write pushed the rim sideways. Writes `40` and up get no reply.
-  - In the full classes 9–f sweep, the wheel stopped sending input reports at some point in
-    classes 9 or `0a` (the motor still toggled during `0b`). Register reads still worked; a
-    power cycle restored it. Which write did it is unknown.
-- Payload packets (`docs/probes/04-payloads.txt`, motor on, weight on): no movement. Some
-  reset the wheel, which disconnects and reconnects within about 2 s with its LED cleared:
-  about `00 07 0f c0` with payload A, `00 09 0f c0` with payload B, and `00 06 0f c0` with
-  payload C (the probe's attribution can lag a step). The reset depends on the payload, so
-  the wheel parses these packets.
+  - `0b` payload packets (`00 01 0b xx` + payload) act like the header-only command; the
+    payload is ignored.
+- `00 00 09 41` **stops all input reports** (also the periodic `00 00 00 f0`) until a power
+  cycle; `09 40` doesn't. The motor and register reads keep working, and buttons pressed in
+  this state draw `00 f8 01`. No other class-9 write undoes it, and neither does a `0f 81`
+  reset.
+- `00 00 0f 81`–`bf` (sampled: `81`–`84`, `88`, `90`, `a0`, `b0`) **reset the wheel**: it
+  drops within about 1 s and rejoins 1–3 s later with its LED cleared. `0f 80` and
+  `0f c0`–`ff` don't. Header-only classes `0d`–`0f` otherwise do nothing visible.
+- Payload type `03` (`00 03 0f c0` + any payload) also resets the wheel, about 2 s after it's
+  sent. That delay put the probe's blame on later steps: the 2026-10-14 payload resets
+  attributed to types `06`, `07` and `09` were type `03`. Types `02`–`1f` otherwise do
+  nothing visible on `0f c0`.
+- After a reset the wheel rejoins without the host's settings: set the LED and the motor
+  (`0b 04`, strength) again.
 - `00 01 08 c0` **powers the wheel off**, just like `00 00 08 c0`. The probe parser now
   refuses any `00 xx 08 c0`.
 - Class 8 (`00 00 08 xx`, all values except `4x` and `c0`) has no force-feedback command:
@@ -189,7 +199,52 @@ force-feedback protocol in general terms:
 
 The byte values aren't given. `docs/probes/` has the scripts used to look for them.
 
+#### Force-feedback reports (found 2026-10-16)
+The rumble packet's first payload byte selects a report, and the packets follow the patent's
+effect-block layout. Sent as `00 01 0f c0` + 8 bytes, the payload is
+`kk ii bb tt …`, where `kk` is the report type:
+- `kk` = `00` is rumble (`00 LL RR …`). The wheel doesn't acknowledge it.
+- Bit 7 of `kk` is ignored (`81`–`90` act like `01`–`10`); it's probably the patent's toggle
+  bit. The wheel ignores a packet identical to the one before it (no second reply), so it
+  treats repeats as retransmissions.
+- `kk` = `02`–`05`, `07`–`09`, `0b`, `0c` are **acknowledged** with a register-style reply
+  `00 00 00 9S CC` (`aS CC` for `0b`). `01`, `06`, `0a` and `0d`–`7f` get no reply.
+  - `CC` is a checksum of the payload: it's linear (each payload bit flips a fixed set of
+    `CC` bits, the same for every `kk`; only the base value depends on `kk`) and covers all
+    7 bytes after `kk`. Same packet, same reply.
+  - `S` is a status. Seen: `0` accepted (create, operation), `1` accepted parameter block,
+    `2` after `0c`, `4` rejected, `5` rejected parameter block, `8` effect memory full.
+  - For `0b`, `S` is `0`/`8` and `CC` mostly `c0`: it doesn't follow this pattern.
+- The wheel also reports register 8 when an effect is created: bit `10` clears (`f1` →
+  `e1`), and most `0b` writes set it again. Bit `08` is set while the memory is full.
+
+| `kk` | Meaning (best guess) | Accepted when |
+|---|---|---|
+| `02` | create effect: `02 ii bb tt dd gg ss ll` (index, block control, type, duration, gain, start delay, loops) | `ii` ≠ 0, `bb` = `05`/`06`/`07` (bit 3 ignored), `tt` ≠ `02` |
+| `03` | envelope parameters | the effect at `ii` has type `01` or `03`–`07` |
+| `04` | condition parameters | type `08`–`0b` |
+| `07` | periodic parameters | type `03`–`07` |
+| `08` | constant-force parameters | type `01` |
+| `09` | effect operation (start/stop?) | `ii` = `01`–`7f` |
+| `0c` | free effect? | `ii` ≠ 0 |
+| `05` | ramp parameters? never accepted | (type `02`, the likely ramp, is rejected at create) |
+
+The parameter-block mapping matches the patent's effect types: `01` constant, `03`–`07` the
+five periodic waves, `08`–`0b` spring/damper/inertia/friction. Types `0c`–`6d` are also
+accepted at create but take no parameter block.
+
+The effect memory fills after roughly 55–110 creates even with `0c` in between; a reset
+(`0f 81`) clears it.
+
+**Nothing has moved the rim yet.** Tried with the weight on and the spring at `48` or `5f`:
+create type `01` (`ff ff 00 01` for duration, gain, delay, loops) with every block control,
+constant parameters `7f`/`ff`/`80` in every byte, envelopes of all `00`/`7f`/`ff`, in both
+orders, then `09 01 01 01` or `09 01 02 01`. With that effect loaded, every header-only
+command in classes `0a`, `0d`, `0e` and `0b 00`–`3f` was also tried as a start; only the
+known motor-off commands moved the rim. The fields of `09` and the units of the effect
+block are the next things to map.
+
 ### Unknown
-- `00 f8 0N 00…` (N = 1–3): seen only while the chatpad was not handshaked and keys were being pressed. Possibly "key pressed while asleep" or an attachment status.
+- `00 f8 0N 00…` (N = 1–3): seen while the chatpad was not handshaked and keys were being pressed, and from the wheel when buttons were pressed after `09 41` had stopped its reports. Probably "input happened but isn't being reported".
 - `00 f8 01` / `00 f8 02` alternate every few seconds while connected; meaning unknown.
 - `00 00 00 f0` (every few seconds while connected) and `00 00 00 20/30/40/60` (a burst after connect); meaning unknown.

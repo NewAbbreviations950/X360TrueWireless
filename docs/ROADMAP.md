@@ -90,15 +90,29 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
     on/off (`02`/`04`) and sets a spring strength (`40`–`5f`, also `60`–`7f`); rumble
     reaches two motors with the bytes swapped. Header-only classes 0–8 and `0b` have no
     sideways force. Some payload packets reset the wheel.
-  - Next:
-    - Calibrate `0b 4x`/`6x` with a better rig than a hanging weight (pull the rim to a fixed
-      angle and feel or measure the return force), and find what `6x` adds over `4x`.
-    - Find which class-9/`0a` write stops input reports, and the write that restores them.
-    - Sweep classes `0d`–`0f` (not reached yet), and re-run the end of `04-payloads.txt`.
-    - Look for directional force: payload packets on class `0b` (`00 01 0b xx` + payload),
-      and the payload types that reset the wheel, with other payloads.
-    - Then write the encoder (`ffb::Op` → packets). Even spring strength and on/off alone
-      would give games a centring force.
+  - Found (2026-10-16): the spring has no centre offset (`0b 5f`/`7f`/`80`/`c0` all return
+    to centre) and `0b 80`–`ff` are ignored. `00 00 0f 81`–`bf` and payload type `03` on
+    `0f c0` reset the wheel. `00 00 09 41` stops all input reports until a power cycle.
+    Class-`0b` payloads and classes `0d`–`0f` don't push the rim.
+    **The force-feedback channel is `00 01 0f c0 kk …`** (rumble is `kk` = `00`): the wheel
+    acknowledges create-effect (`02`), envelope/condition/periodic/constant parameter blocks
+    (`03`/`04`/`07`/`08`), an operation (`09`) and a free (`0c`) with a status and a payload
+    checksum, and the effect types match the patent. Details in `docs/protocol.md`.
+  - **Main goal: find the real force-feedback commands** (constant force and the other
+    patent effects, played by the wheel's motor), and search for them exhaustively before
+    settling for less. No PC driver ever supported this wheel's force feedback, so there's
+    no capture to copy; the search is systematic probing (`docs/probes/scripts/`).
+    - Nothing moves yet with create + constant parameters + `09`. Map every field with the
+      acknowledgement (no rig needed): which values of each byte of `02`, `08`, `03` and
+      `09` are accepted, rejected or change register 8.
+    - Then movement tests on the accepted space: the `09` operation and loop fields, duration
+      and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
+      effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).
+    - Find what `0c` frees (the memory still fills) and what `0b` replies mean.
+    - Write the encoder (`ffb::Op` → packets) once forces are found.
+  - **Fallback only**, if the search above comes up empty: a centring force from `0b 04`
+    (motor on), `0b 02` (off) and `0b 40`–`7f` (strength), which games could scale. Not
+    a substitute for the search.
 
 ## Architecture decisions (from the initial plan)
 - Rust. The daemon runs as a systemd **user** service, so it works in Steam Deck game
