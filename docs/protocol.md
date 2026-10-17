@@ -258,9 +258,12 @@ Unattended search on 2026-10-17 (weight on, spring `48`, 6.5 hours, nothing move
   value was then tried as a start, with no movement (below).
 - Movement tests on 2026-10-17 evening (weight on, spring `48`, reset before each, all
   acknowledged, none moved): every `0b xx` value sent before the create, between the
-  constant block and `09`, or after `09`; effect indices `02`–`7f` with block control
+  constant block and `09`, or after `09`; effect indices `02`–`7f` (sampled) with block control
   `05`/`06`/`07`; duration × gain × loops (`00`–`ff` × `7f`/`ff` × `00`/`01`/`ff`); the five
   periodic types with periodic and envelope blocks; constant force with envelopes.
+- Unacknowledged report types as a start (constant effect loaded, none moved, no replies):
+  `kk` = `01`, `06`, `0a`, `0d`–`7f` as `kk 01 XX 01` (`XX` = `01`/`02`/`ff`), and
+  `01`/`06`/`09`/`0a` on payload types `02`, `04`–`1f` (`00 TT 0f c0 kk 01 01 01`).
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 

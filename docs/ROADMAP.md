@@ -108,8 +108,10 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       with a constant force loaded, and host conditions started with `09 01 01 01`.
     - Also ruled out (2026-10-17): every `0b` value around the create and `09`, other
       indices and block controls, duration/gain/loops, periodic waves and envelopes.
-    - Next: the unacknowledged report types (`kk` = `01`, `06`, `0a`, `0d`–`7f`) as a start
-      with an effect loaded, and `09`/`0a` on the other payload types (`00 TT 0f c0`).
+    - Also ruled out: the unacknowledged report types (`kk` = `01`, `06`, `0a`, `0d`–`7f`)
+      and the other payload types (`00 TT 0f c0`) as a start.
+    - Next: every motor mode (`00 00 0b 00`–`3f`) set before the effect is loaded, in case
+      the autocentre mode (`0b 04`, used in every test so far) blocks host effects.
     - Then movement tests on the accepted space: the `09` operation and loop fields, duration
       and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
       effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).
