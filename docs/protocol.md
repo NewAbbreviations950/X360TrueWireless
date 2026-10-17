@@ -289,6 +289,13 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   (it scales the autocentre, which is the patent's "native effect"), and `0b 00`–`3f`
   **device control** (enable/disable motors, stop effects, reset, pause/continue the play
   list, start/stop the native effect).
+- Tested on that reading (2026-10-18 night, weight on, none moved): a constant force at
+  index 1 followed by `0b AA II 00 00 00 00 00` for every `AA` with `II` = `01`, `02`, `80`,
+  and `0b AA ff ff ff ff ff ff`; `01` in each of bytes 3–7 with 18 actions; the same with the
+  autocentre stopped first (`0b 10`); and constant-force or create bytes set to `40`/`c0` (a
+  possible direction). The `0b` reply is `c0` when `AA & 3` = 0 and `df` otherwise, except
+  `AA & 0c` ≠ 0 with all index bytes `ff`, which gives `c1`. So the reply does read the
+  index bytes, but none of these combinations played the effect.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
