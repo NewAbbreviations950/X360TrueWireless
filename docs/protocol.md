@@ -264,6 +264,13 @@ Unattended search on 2026-10-17 (weight on, spring `48`, 6.5 hours, nothing move
 - Unacknowledged report types as a start (constant effect loaded, none moved, no replies):
   `kk` = `01`, `06`, `0a`, `0d`–`7f` as `kk 01 XX 01` (`XX` = `01`/`02`/`ff`), and
   `01`/`06`/`09`/`0a` on payload types `02`, `04`–`1f` (`00 TT 0f c0 kk 01 01 01`).
+- Motor mode first (2026-10-17): after each `00 00 0b 00`–`3f`, a constant force (`08 01` +
+  `7f`×6 or `80`×6) started with `09 01 01 01` never moved the rim, not even in the modes
+  that leave the motor limp with the weight resting on the stop.
+- Only 12 bytes count: `0f c0` packets of 13–32 bytes are acknowledged with exactly the
+  checksum of their first 12 bytes, so the wheel (or receiver) drops the rest.
+- Only `00 01 0f c0` reaches the effect channel: `09` sent with byte 1 = `00`, `02`, `04`–`ff`
+  or byte 0 = `01`–`ff` gets no reply.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
