@@ -1,6 +1,6 @@
 # Xbox 360 Wireless Receiver protocol notes
 
-Verified against a real receiver (045e:0719) with `x360chatpad-dump`; raw logs are in `captures/`.
+Verified against a real receiver (045e:0719) with `x360chatpad-dump`; raw logs are in `captures/` (large ones xz-compressed).
 Items marked *(xpad)* come from the kernel `xpad` driver and are not independently re-verified yet.
 
 ## USB layout
@@ -243,6 +243,17 @@ orders, then `09 01 01 01` or `09 01 02 01`. With that effect loaded, every head
 command in classes `0a`, `0d`, `0e` and `0b 00`–`3f` was also tried as a start; only the
 known motor-off commands moved the rim. The fields of `09` and the units of the effect
 block are the next things to map.
+
+Unattended search on 2026-10-17 (weight on, spring `48`, 6.5 hours, nothing moved):
+- Host conditions: create types `08`–`0b` (block `05`, `ff ff 00 01`), condition blocks
+  (`04 01` + all `7f`, `ff`, `40`, `80`, or `7f`/`00` alternating), then `09 01 01 01`.
+- Every pair of `09` bytes 2 and 3 (`09 01 XX YY 00 00 00 00`, all 65,536), with a type-`01`
+  effect loaded (`08 01` + `7f`×6), one reset per 256. All were acknowledged with status `0`
+  and none was rejected, so `09` doesn't validate these bytes. One reply came back as `9d`,
+  but a resend of the same packet gave `90` three times, so it was a radio glitch.
+- `kk` = `0b`'s status depends on bit 0 of each payload byte: any byte `01` gives `a8`, while
+  `00` and `80` give `a0`. Its checksum covers only byte 1 (`0b 01` → `df`, the rest `c0`).
+  It may be a device control (enable actuators, stop all, pause…), so it's mapped next.
 
 ### Unknown
 - `00 f8 0N 00…` (N = 1–3): seen while the chatpad was not handshaked and keys were being pressed, and from the wheel when buttons were pressed after `09 41` had stopped its reports. Probably "input happened but isn't being reported".

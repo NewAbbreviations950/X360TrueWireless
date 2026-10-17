@@ -102,9 +102,13 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
     patent effects, played by the wheel's motor), and search for them exhaustively before
     settling for less. No PC driver ever supported this wheel's force feedback, so there's
     no capture to copy; the search is systematic probing (`docs/probes/scripts/`).
-    - Nothing moves yet with create + constant parameters + `09`. Map every field with the
-      acknowledgement (no rig needed): which values of each byte of `02`, `08`, `03` and
-      `09` are accepted, rejected or change register 8.
+    - Nothing moves yet with create + constant parameters + `09`. The acknowledgement map of
+      `02`, `03`, `08` and `09` is done: every value field accepts every value, so the ack
+      can't show what's missing. The 2026-10-17 search ruled out every `09` byte 2/3 pair
+      with a constant force loaded, and host conditions started with `09 01 01 01`.
+    - Next: map `kk` = `0b` (its status reacts to payload bits, so it may be a device
+      control such as "enable actuators") and `0c`, then movement tests of each `0b` value
+      before and after `09`.
     - Then movement tests on the accepted space: the `09` operation and loop fields, duration
       and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
       effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).
