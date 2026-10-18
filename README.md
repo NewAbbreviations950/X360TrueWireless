@@ -81,11 +81,11 @@ four wheels and controllers works. The wheel centres itself whenever no game is 
 
 Choose how wheels show up in the wheel's box in the popup. The choice applies to every
 wheel, and right away, so switch before starting a game:
-- **Thrustmaster TMX** (default): games see a Thrustmaster TMX, Thrustmaster's Xbox-layout
-  wheel with two pedals, with force feedback. Games with a TMX profile set up the buttons
-  and pedals themselves.
-- **Logitech G920**: the same, shown as Logitech's Xbox-layout wheel, for games that have a
-  G920 profile but none for the TMX.
+- **Logitech G920** (default): games see a Logitech G920, Logitech's Xbox-layout wheel, with
+  force feedback. Most racing games that know any wheel have a G920 profile and set up the
+  buttons and pedals themselves.
+- **Thrustmaster TMX**: the same, shown as Thrustmaster's Xbox-layout wheel, for games that
+  have a TMX profile but none for the G920.
 - **Xbox controller**: an ordinary Xbox 360 controller, for games without wheel support.
   Steering is the left stick, and you get rumble and the wheel's own centring.
 
@@ -120,7 +120,7 @@ E = "KEY_F5"
 ```
 
 `wheel_mode` (a top-level setting, above any `[keys…]` section) is the popup's Racing wheel
-choice: `"thrustmaster"` (default), `"logitech"` or `"controller"`.
+choice: `"logitech"` (default), `"thrustmaster"` or `"controller"`.
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
 the tray menu, or run `systemctl --user restart x360truewireless`.

@@ -42,17 +42,17 @@ const HEADER: f32 = 28.0;
 /// The wheel modes offered, with their labels and explanations.
 const WHEEL_MODES: &[(WheelMode, &str, &str)] = &[
     (
-        WheelMode::Thrustmaster,
-        "Thrustmaster TMX",
-        "A force-feedback wheel that games see as a Thrustmaster TMX, so games with a TMX \
+        WheelMode::Logitech,
+        "Logitech G920",
+        "A force-feedback wheel that games see as a Logitech G920, so games with a G920 \
          profile set up its buttons and pedals themselves. Turn Steam Input off for generic \
          controllers so games see the wheel itself.",
     ),
     (
-        WheelMode::Logitech,
-        "Logitech G920",
-        "The same wheel shown as a Logitech G920, for games with a G920 profile but none for \
-         the TMX.",
+        WheelMode::Thrustmaster,
+        "Thrustmaster TMX",
+        "The same wheel shown as a Thrustmaster TMX, for games with a TMX profile but none \
+         for the G920.",
     ),
     (
         WheelMode::Controller,

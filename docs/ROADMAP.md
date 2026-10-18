@@ -239,7 +239,8 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       G923 Xbox layout" preset: right controls and force feedback. TMX mode gets force
       feedback too, but no preset maps it: the game has no TMX preset, its TX preset acts
       as if the left-paddle modifier is held (Thrustmaster or DirectInput input), and T248
-      (Xbox) gets the face buttons wrong. An earlier "TX works" was a controller's input. Switching modes mid-game loses force feedback
+      (Xbox) gets the face buttons wrong. An earlier "TX works" was a controller's input.
+      So the G920 is the default again, and the TMX the second choice. Switching modes mid-game loses force feedback
       (the game sets effects up on the wheel it found at launch). A switch also once killed
       slot 1's thread with EINVAL from a withdrawn force-feedback request; such requests are
       now skipped, and a failed slot restarts. Still to look at: SnowRunner forgets the

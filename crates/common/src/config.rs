@@ -11,7 +11,7 @@
 //! [keys.green]
 //! E = "KEY_F5"
 //!
-//! # How a racing wheel shows up: "thrustmaster" (default), "logitech" or "controller".
+//! # How a racing wheel shows up: "logitech" (default), "thrustmaster" or "controller".
 //! wheel_mode = "controller"
 //! ```
 
@@ -38,15 +38,15 @@ pub struct Config {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WheelMode {
-    /// A Thrustmaster TMX with force feedback, so games with a TMX profile set it up
-    /// themselves. (Pre-releases had a generic wheel instead, called `generic`, `wheel` or
-    /// `joystick`.)
+    /// A Logitech G920 with force feedback, so games with a G920 profile (most racing games
+    /// that know any wheel) set it up themselves.
     #[default]
+    Logitech,
+    /// A Thrustmaster TMX with force feedback, for games with a TMX profile but none for the
+    /// G920. (Pre-releases had a generic wheel instead, called `generic`, `wheel` or
+    /// `joystick`.)
     #[serde(alias = "generic", alias = "wheel", alias = "joystick")]
     Thrustmaster,
-    /// A Logitech G920 with force feedback, for games with a G920 profile but none for the
-    /// TMX.
-    Logitech,
     /// An Xbox 360 pad, for games without wheel support: steering on the left stick, rumble,
     /// and the wheel's own autocentre.
     Controller,
