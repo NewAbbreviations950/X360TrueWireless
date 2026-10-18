@@ -25,7 +25,8 @@ const TYPE_FRICTION: u8 = 0x0b;
 
 /// Which way a positive [`Kind::Constant`] force turns the rim: evdev direction `0x4000`
 /// is "left" in the kernel's force-feedback docs, so positive forces push left (negative
-/// wheel force).
+/// wheel force). Checked in DiRT 4 under Proton by logging steering with each force: with
+/// this sign the force opposes the steering in corners; flipped, it pulled into them.
 const CONSTANT_SIGN: f32 = -1.0;
 
 #[derive(Default)]
@@ -49,6 +50,8 @@ struct Slot {
     created: Option<u8>,
     /// The parameter block needs resending.
     dirty: bool,
+    /// The last parameter block sent, so an update that rounds to the same bytes is skipped.
+    sent: Option<Packet>,
     state: Play,
 }
 
@@ -91,6 +94,7 @@ impl Encoder {
                             effect,
                             created: None,
                             dirty: true,
+                            sent: None,
                             state: Play::Stopped,
                         },
                     );
@@ -106,6 +110,13 @@ impl Encoder {
             }
             Op::Play { id, count } => {
                 if let Some(slot) = self.effects.get_mut(&id) {
+                    // Proton restarts every effect each frame (DiRT 4: ~60 a second per
+                    // effect). An endless effect that's already playing would only restart
+                    // the same force, so don't spend radio time on it.
+                    let endless = slot.effect.duration.is_none() && slot.effect.delay.is_zero();
+                    if endless && matches!(slot.state, Play::Playing { until: None, .. }) {
+                        return;
+                    }
                     slot.state = Play::Starting {
                         at: now + slot.effect.delay,
                         left: count - 1,
@@ -166,6 +177,7 @@ impl Encoder {
                     [index(id), 0x05, blocks.kind, 0x00, 0xff, 0x00, 0x01],
                 ));
                 out.push(blocks.params);
+                slot.sent = Some(blocks.params);
                 if blocks.envelope {
                     out.push(ff(0x03, [index(id), 0, 0, 0, 0, 0, 0]));
                 }
@@ -178,7 +190,10 @@ impl Encoder {
             }
             if slot.dirty {
                 // Only the parameter block: it changes the force without a restart.
-                out.push(blocks.params);
+                if slot.sent != Some(blocks.params) {
+                    out.push(blocks.params);
+                    slot.sent = Some(blocks.params);
+                }
                 slot.dirty = false;
             }
             advance(slot, now, out);
@@ -408,6 +423,12 @@ mod tests {
             ]
         );
 
+        // Playing it again while it plays (Proton does, every frame) changes nothing.
+        out.clear();
+        e.op(Op::Play { id: 0, count: 1 }, t, &mut out);
+        e.tick(t, &mut out);
+        assert!(out.is_empty());
+
         // Two updates in one poll: only the latest goes out, as a parameter block.
         out.clear();
         e.op(
@@ -511,6 +532,10 @@ mod tests {
         out.clear();
         e.op(Op::Gain(0.5), t, &mut out);
         assert_eq!(hex(&out), ["00 01 0f c0 04 02 00 40 40 40 40 00"]);
+        // An update that comes out as the same bytes isn't sent again.
+        out.clear();
+        e.op(Op::Gain(0.501), t, &mut out);
+        assert!(out.is_empty());
     }
 
     #[test]

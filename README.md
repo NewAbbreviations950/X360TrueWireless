@@ -76,6 +76,9 @@ needs it.
 Wheels are recognised when they connect, so there's nothing to set up, and any mix of up to
 four wheels and controllers works. The wheel centres itself whenever no game is driving it.
 
+Tested with DiRT 4 on the Steam Deck. SnowRunner sees the wheel and its buttons but sends it
+no force feedback.
+
 Choose how wheels show up under **Racing wheel** in the settings popup. The change applies
 right away, so switch before starting a game:
 - **Sim wheel** (default): a "Microsoft Xbox 360 Wireless Racing Wheel" with force feedback,

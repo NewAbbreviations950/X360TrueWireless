@@ -32,8 +32,11 @@ const RECEIVER_IDS: &[(u16, u16)] = &[(0x045e, 0x0719), (0x045e, 0x0291), (0x045
 const SLOTS: u8 = 4;
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(1);
 /// How long to wait for the device type after a connect before assuming a gamepad. The link
-/// info carrying it arrives within about 10 ms.
-const DEVICE_TYPE_TIMEOUT: Duration = Duration::from_secs(1);
+/// info carrying it arrives within about 10 ms, but a controller that was already connected
+/// when the driver started sends none, and sometimes misses a request.
+const DEVICE_TYPE_TIMEOUT: Duration = Duration::from_secs(3);
+/// How often to ask for the device type while waiting for it.
+const DEVICE_REQUEST_INTERVAL: Duration = Duration::from_millis(250);
 /// How often to re-read a connected controller's battery level.
 const BATTERY_REQUEST_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -265,8 +268,13 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     // Log games' force-feedback requests to a wheel (X360TRUEWIRELESS_FF_LOG=1).
     let ff_log = std::env::var_os("X360TRUEWIRELESS_FF_LOG").is_some();
     let mut controller: Option<Controller> = None;
+    // Steering position, logged with each constant force to check which way forces turn.
+    let mut steering: i16 = 0;
     // Connected, but the device type hasn't arrived yet: the deadline for it.
     let mut pending: Option<Instant> = None;
+    let mut next_device_request = Instant::now();
+    // The controller was assumed to be a gamepad; a late device type can still correct it.
+    let mut guessed = false;
     let mut chatpad = ChatpadState::default();
     let mut indicators = indicators::IndicatorSync::default();
     let mut keepalive_phase = false;
@@ -294,6 +302,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             } else {
                                 // The link info usually brings the type first; ask in case.
                                 pending = Some(Instant::now() + DEVICE_TYPE_TIMEOUT);
+                                next_device_request = Instant::now() + DEVICE_REQUEST_INTERVAL;
                                 send(&mut ep_out, &out::device_request())?;
                             }
                             send(&mut ep_out, &out::led(2 + slot))?;
@@ -308,6 +317,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             eprintln!("slot {slot}: controller disconnected");
                             controller = None;
                             pending = None;
+                            guessed = false;
                             shared.set_connected(slot, false);
                             let out = chatpad.release_all(&shared.keymap.read().unwrap());
                             shared.type_keys(&out.keys)?;
@@ -316,24 +326,47 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             Some(Controller::Pad(pad) | Controller::WheelPad(pad)) => {
                                 pad.emit(&state)?
                             }
-                            Some(Controller::Wheel(wheel, _)) => wheel.emit(&state)?,
+                            Some(Controller::Wheel(wheel, _)) => {
+                                steering = state.lx;
+                                wheel.emit(&state)?
+                            }
                             None => {}
                         },
                         InPacket::LinkInfo { battery, device } => {
-                            if let Some(level) = battery {
+                            if let (Some(level), false) = (battery, device == Some(Device::Wheel)) {
                                 shared.set_battery(slot, level);
                             }
-                            if let (Some(device), Some(_)) = (device, pending) {
-                                controller =
-                                    Some(new_controller(slot, device, shared, &mut ep_out)?);
-                                pending = None;
+                            if let Some(device) = device {
+                                device_type(
+                                    slot,
+                                    device,
+                                    shared,
+                                    &mut ep_out,
+                                    &mut controller,
+                                    &mut pending,
+                                    &mut guessed,
+                                )?;
                             }
                         }
-                        InPacket::Device(device) if pending.is_some() => {
-                            controller = Some(new_controller(slot, device, shared, &mut ep_out)?);
-                            pending = None;
+                        InPacket::Device(device) => device_type(
+                            slot,
+                            device,
+                            shared,
+                            &mut ep_out,
+                            &mut controller,
+                            &mut pending,
+                            &mut guessed,
+                        )?,
+                        // A wheel on AC without batteries reports them empty, and force
+                        // feedback needs AC anyway, so a wheel shows no battery level.
+                        InPacket::Battery(level)
+                            if controller
+                                .as_ref()
+                                .and_then(Controller::wheel_mode)
+                                .is_none() =>
+                        {
+                            shared.set_battery(slot, level)
                         }
-                        InPacket::Battery(level) => shared.set_battery(slot, level),
                         InPacket::Chatpad(ChatpadEvent::WakeRequest) => {
                             send(&mut ep_out, &out::chatpad_wake_ack())?
                         }
@@ -376,6 +409,10 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                 eprintln!("slot {slot}: no device type reported; treating it as a gamepad");
                 controller = Some(new_controller(slot, Device::Gamepad, shared, &mut ep_out)?);
                 pending = None;
+                guessed = true;
+            } else if pending.is_some() && Instant::now() >= next_device_request {
+                send(&mut ep_out, &out::device_request())?;
+                next_device_request = Instant::now() + DEVICE_REQUEST_INTERVAL;
             }
 
             // The wheel mode was changed: replace the wheel's virtual device.
@@ -421,7 +458,11 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                     }
                     encoder.tick(now, &mut packets);
                     for p in &packets {
-                        if ff_log {
+                        if ff_log && p[..5] == [0x00, 0x01, 0x0f, 0xc0, 0x08] {
+                            // A constant force: positive turns the rim the way positive
+                            // steering does, so a force against the steering centres it.
+                            eprintln!("slot {slot}: ff -> {p:02x?} (steering {steering})");
+                        } else if ff_log {
                             eprintln!("slot {slot}: ff -> {p:02x?}");
                         }
                         send(&mut ep_out, p)?;
@@ -430,7 +471,9 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                 None => {}
             }
             // The link info only gives the battery level at connect time, so ask again now and then.
-            if controller.is_some() && Instant::now() >= next_battery_request {
+            if matches!(controller, Some(Controller::Pad(_)))
+                && Instant::now() >= next_battery_request
+            {
                 send(&mut ep_out, &out::battery_request())?;
                 next_battery_request = Instant::now() + BATTERY_REQUEST_INTERVAL;
             }
@@ -469,6 +512,30 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
 }
 
 /// The virtual device for what connected: a racing wheel for a wheel, a pad for the rest.
+/// A device type arrived: create the controller it was waiting for, or replace one that was
+/// assumed to be a gamepad when the type came too late.
+#[allow(clippy::too_many_arguments)]
+fn device_type(
+    slot: u8,
+    device: Device,
+    shared: &Shared,
+    ep_out: &mut Endpoint<Interrupt, Out>,
+    controller: &mut Option<Controller>,
+    pending: &mut Option<Instant>,
+    guessed: &mut bool,
+) -> Result<()> {
+    if pending.take().is_some() {
+        *controller = Some(new_controller(slot, device, shared, ep_out)?);
+    } else if *guessed && device == Device::Wheel {
+        eprintln!("slot {slot}: the device type came late; it's a racing wheel");
+        // Remove the gamepad before the wheel appears.
+        *controller = None;
+        *controller = Some(new_controller(slot, device, shared, ep_out)?);
+        *guessed = false;
+    }
+    Ok(())
+}
+
 /// Create the virtual device for a newly connected controller, or a wheel in the current
 /// wheel mode.
 fn new_controller(
@@ -479,6 +546,8 @@ fn new_controller(
 ) -> Result<Controller> {
     Ok(match device {
         Device::Wheel => {
+            // In case a level arrived before the device type.
+            shared.battery[slot as usize].store(0, Ordering::SeqCst);
             let mode = *shared.wheel_mode.read().unwrap();
             eprintln!("slot {slot}: racing wheel ({mode:?} mode)");
             if mode == WheelMode::Controller {

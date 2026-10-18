@@ -195,6 +195,19 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       (OpenFFBoard, in SDL's list since 2.30), and the joystick mode is gone (`joystick`
       still parses, as sim wheel). To test: whether SnowRunner lists the wheel, binds its
       buttons and plays forces.
+    - **rc4 result (Deck, over SSH):** SnowRunner lists the wheel and binds its buttons, but
+      never creates an effect: its Proton log (`WINEDEBUG=+dinput`) shows it enumerating
+      constant force and the force-feedback axes, then nothing. **DiRT 4 works:** constant
+      force, spring, damper and friction, with forces up to ~0.9 while driving. Logging the
+      steering with each constant force showed `CONSTANT_SIGN = -1` is right (force opposes
+      steering in 307 of 385 corner samples; flipped, 263 of 329 pushed into the corner).
+      Proton restarts every effect each frame (~60/s), so a re-play of a playing endless
+      effect and a parameter block that rounds to the same bytes are no longer sent. Fixed
+      too: a wheel already connected when the driver starts sometimes missed the device-type
+      request (now retried every 250 ms for 3 s, and a late answer replaces the gamepad
+      guess), and wheels show no battery (on AC without batteries they report empty). Next:
+      why SnowRunner skips generic wheels (profiles by VID/PID?), a mode switch for game
+      mode (a wheel button combo), the periodic block.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.
