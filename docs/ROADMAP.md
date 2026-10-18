@@ -215,7 +215,9 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       usages, and it's typed as a dual-pedal wheel). Layout from DiRT 4's
       `input/actionmaps/lg_g920.xml`: buttons 1–11 = A, B, X, Y, right paddle, left paddle,
       Menu, View, RSB, LSB, Xbox; throttle Y and brake Z rotation, both reading full when
-      released ("negative"). To test: DiRT 4 and SnowRunner pick it up without binding, the
+      released ("negative"). Proton's dinput (`joystick_hid.c`) renames a G920's HID axes
+      to match Windows: Z becomes Z rotation "Brake" and Z rotation a slider "Clutch", so
+      the brake goes on `ABS_Z` (rc6 had it on `ABS_RZ`, and DiRT saw it as the clutch). To test: DiRT 4 and SnowRunner pick it up without binding, the
       pedals and paddles work, and forces play. Caveat: G920 profiles assume 900° of
       rotation and the 360 wheel has about 270°. Later: a Thrustmaster TMX mode (also in
       DiRT 4's profiles, `tm_tmx.xml`) and older wheels with fewer buttons and pedals

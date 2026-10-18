@@ -291,8 +291,7 @@ fn buttons(layout: WheelLayout) -> &'static [(u16, KeyCode)] {
 }
 
 /// The axes in key-code order, which is the order SDL and Proton number them in. For the
-/// G920 Proton maps the first four to steering, throttle, brake and clutch usages, so there
-/// must be exactly those four.
+/// G920 Proton takes exactly four: steering, throttle, brake and clutch.
 fn axes(layout: WheelLayout) -> Vec<(AbsoluteAxisCode, AbsInfo)> {
     let stick = AbsInfo::new(0, -32768, 32767, 0, 0, 0);
     let pedal = AbsInfo::new(0, 0, 255, 0, 0, 0);
@@ -368,12 +367,13 @@ impl Wheel {
             |neg: u16, pos: u16| (s.buttons & pos != 0) as i32 - (s.buttons & neg != 0) as i32;
         let mut axes = vec![(AbsoluteAxisCode::ABS_X, s.lx as i32)];
         match self.layout {
-            // Released pedals read full, as on a G920: throttle, clutch (none, so always
-            // released) and brake, which Proton presents as Y, Z and Z rotation.
+            // Released pedals read full, as on a G920: throttle, brake and clutch (none, so
+            // always released). Proton's DirectInput renames a G920's Z to Z rotation
+            // ("Brake") and its Z rotation to a slider ("Clutch"), as on Windows.
             WheelLayout::G920 => axes.extend([
                 (AbsoluteAxisCode::ABS_Y, 255 - s.rt as i32),
-                (AbsoluteAxisCode::ABS_Z, 255),
-                (AbsoluteAxisCode::ABS_RZ, 255 - s.lt as i32),
+                (AbsoluteAxisCode::ABS_Z, 255 - s.lt as i32),
+                (AbsoluteAxisCode::ABS_RZ, 255),
             ]),
             // As on the pad. The other stick values go to Y, RX and RY until a capture shows
             // whether the wheel uses them.
