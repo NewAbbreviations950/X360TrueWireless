@@ -13,7 +13,7 @@ pub const OBJECT_PATH: &str = "/io/github/NewAbbreviations950/X360TrueWireless";
 pub const INTERFACE: &str = "io.github.NewAbbreviations950.X360TrueWireless1";
 
 /// What a controller slot has connected.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SlotDevice {
     Empty,
     /// Connected, but it hasn't said yet whether it's a controller or a wheel.

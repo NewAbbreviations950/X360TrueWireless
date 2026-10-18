@@ -106,10 +106,14 @@ const APP_ID: &str = "x360truewireless";
 /// on the photos). Drawn in two colours, swapped for the theme's at runtime.
 const CONTROLLER_SVG: &str = include_str!("icons/controller.svg");
 const CHATPAD_SVG: &str = include_str!("icons/chatpad.svg");
+/// The racing wheel front on, measured the same way on a photo of one.
+const WHEEL_SVG: &str = include_str!("icons/wheel.svg");
 const SVG_BODY: &str = "#b0b0b0";
 const SVG_DETAIL: &str = "#303030";
-/// How wide the pictures are in the popup; their height follows from their shape.
+/// How wide the pictures are in the popup; their height follows from their shape. The wheel
+/// is round, so it's narrower to stay as tall as the controllers.
 const ICON_WIDTH: f32 = 78.0;
+const WHEEL_WIDTH: f32 = 66.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -183,8 +187,8 @@ struct Settings {
     /// The window size being asked for, how many times, and when last.
     resize: (Vec2, u8, Instant),
     anchor: Option<Anchor>,
-    /// Rendered controller pictures, by (chatpad, dimmed).
-    icons: HashMap<(bool, bool), egui::TextureHandle>,
+    /// Rendered device pictures, by (device, dimmed).
+    icons: HashMap<(SlotDevice, bool), egui::TextureHandle>,
     config: Config,
     load_error: Option<String>,
     layer: Layer,
@@ -332,19 +336,24 @@ impl Settings {
         });
     }
 
-    /// The controller picture (with a chatpad or not), dimmed for one still connecting.
-    fn icon(&mut self, ctx: &egui::Context, chatpad: bool, dim: bool) -> egui::TextureHandle {
+    /// The picture of a device (a wheel, a controller with a chatpad, or else a plain
+    /// controller), dimmed for one still connecting.
+    fn icon(&mut self, ctx: &egui::Context, device: SlotDevice, dim: bool) -> egui::TextureHandle {
         let p = &self.palette;
         let scale = ctx.pixels_per_point();
         self.icons
-            .entry((chatpad, dim))
+            .entry((device, dim))
             .or_insert_with(|| {
                 let body = mix(p.button, p.text, if dim { 0.25 } else { 0.6 });
                 let detail = mix(p.window, p.button, 0.5);
-                let svg = if chatpad { CHATPAD_SVG } else { CONTROLLER_SVG };
-                let image = render_svg(svg, body, detail, ICON_WIDTH * scale);
+                let (svg, width) = match device {
+                    SlotDevice::Wheel => (WHEEL_SVG, WHEEL_WIDTH),
+                    SlotDevice::Chatpad => (CHATPAD_SVG, ICON_WIDTH),
+                    _ => (CONTROLLER_SVG, ICON_WIDTH),
+                };
+                let image = render_svg(svg, body, detail, width * scale);
                 ctx.load_texture(
-                    format!("device-{chatpad}-{dim}"),
+                    format!("device-{device:?}-{dim}"),
                     image,
                     egui::TextureOptions::LINEAR,
                 )
@@ -378,7 +387,7 @@ impl Settings {
                 Stroke::new(1.0, mix(p.window, p.text, 0.2)),
                 egui::StrokeKind::Inside,
             );
-            let icon = self.icon(ui.ctx(), false, true);
+            let icon = self.icon(ui.ctx(), SlotDevice::Controller, true);
             paint_icon(ui.painter(), &icon, rect.center() - egui::vec2(0.0, 30.0));
             let painter = ui.painter();
             painter.text(
@@ -441,12 +450,8 @@ impl Settings {
         );
         let connecting = device == SlotDevice::Connecting;
         let centre = egui::pos2(inner.center().x, inner.top() + 56.0);
-        if device == SlotDevice::Wheel {
-            wheel_icon(&painter, centre, &p);
-        } else {
-            let icon = self.icon(ui.ctx(), device == SlotDevice::Chatpad, connecting);
-            paint_icon(&painter, &icon, centre);
-        }
+        let icon = self.icon(ui.ctx(), device, connecting);
+        paint_icon(&painter, &icon, centre);
         let name = match device {
             SlotDevice::Connecting => "Connecting…",
             SlotDevice::Chatpad => "Controller + chatpad",
@@ -1050,24 +1055,9 @@ fn gear_button(ui: &mut egui::Ui, rect: Rect, p: &Palette, on: bool) -> egui::Re
     response.on_hover_text("Settings")
 }
 
-/// A steering wheel, about 56 points across, around `c`.
-fn wheel_icon(painter: &egui::Painter, c: egui::Pos2, p: &Palette) {
-    let body = mix(p.button, p.text, 0.6);
-    painter.circle_stroke(c, 25.0, Stroke::new(6.0, body));
-    painter.circle_filled(c, 7.0, body);
-    for dir in [
-        egui::vec2(-1.0, 0.0),
-        egui::vec2(1.0, 0.0),
-        egui::vec2(0.0, 1.0),
-    ] {
-        painter.line_segment([c + dir * 6.0, c + dir * 23.0], Stroke::new(5.0, body));
-    }
-}
-
-/// Draw a controller picture centred on `c`, `ICON_WIDTH` wide.
+/// Draw a device picture centred on `c`, at the size it was rendered for.
 fn paint_icon(painter: &egui::Painter, icon: &egui::TextureHandle, c: egui::Pos2) {
-    let [w, h] = icon.size();
-    let size = egui::vec2(ICON_WIDTH, ICON_WIDTH * h as f32 / w.max(1) as f32);
+    let size = icon.size_vec2() / painter.ctx().pixels_per_point();
     painter.image(
         icon.id(),
         Rect::from_center_size(c, size),
