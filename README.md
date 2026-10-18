@@ -93,8 +93,10 @@ For both wheel modes, turn Steam Input off for generic controllers in Steam's co
 settings: with it on, games get Steam's virtual pad in place of the wheel, which has rumble
 but no force feedback. Your Xbox controllers stay on Steam Input.
 
-Tested with DiRT 4 on the Steam Deck. SnowRunner sees the wheel and its buttons but sends it
-no force feedback, because of a bug in Proton 11's DirectInput.
+Tested on the Steam Deck with DiRT 4, and SnowRunner. SnowRunner needs Proton 6.3 for force
+feedback (choose it under the game's Properties, Compatibility): Proton 7 and later reject the
+way it asks for the wheel's force-feedback axis, so it sends no forces. In the game, pick
+the Thrustmaster wheel type (TX or T150).
 
 ## Configuration
 

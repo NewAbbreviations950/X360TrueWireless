@@ -235,6 +235,14 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       RSB, View and Xbox are guesses (DiRT's TMX binds look back to button 4 and select to
       button 12); check them in DiRT's controls screen. The old `generic` setting now
       means the TMX.
+    - **SnowRunner works on Proton 6.3** (rc7, TMX mode, game set to a Thrustmaster TX or
+      T150). On Proton 7 and later it calls `EnumObjects(DIDFT_FFACTUATOR | DIDFT_AXIS)`,
+      which Wine's dinput rejects since the Wine 7 rewrite (Wine 6 filtered by type
+      instead), so it never creates effects; checked in Proton 7.0/8.0/11 sources and on
+      the Deck with 8, 11 and Experimental. On 6.3 it keeps a friction effect and a constant
+      force, each re-uploaded thousands of times a drive, and the force opposed the steering
+      in 90% of turning samples. Its menu test plays a 5 s sine, which the encoder can't play
+      yet (periodic block). A Wine bug report is drafted outside the repo.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.
