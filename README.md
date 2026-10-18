@@ -97,7 +97,7 @@ pedals, which read fully one way when released, look like sticks held over to on
 works too, but it turns Steam Input off for every controller in that game, Xbox ones
 included.
 
-Tested on the Steam Deck with DiRT 4, and SnowRunner. SnowRunner needs Proton 6.3 for force
+Tested on the Steam Deck with DiRT 4, Wreckfest and SnowRunner. SnowRunner needs Proton 6.3 for force
 feedback (choose it under the game's Properties, Compatibility): Proton 7 and later reject the
 way it asks for the wheel's force-feedback axis, so it sends no forces. Set the wheel to
 **Logitech G920** in the popup before starting the game (SnowRunner sets up force feedback

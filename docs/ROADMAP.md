@@ -247,7 +247,8 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       rest at their maximum like a real G920's: Wreckfest had menu navigation on them, and
       Wine shows axes centred until the first report, so the first input looks like the
       pedals moving. Pressing the pedals once, then rebinding menu navigation to the D-pad,
-      fixed it (real G920s hit the same). Force feedback in Wreckfest not checked yet. Switching modes mid-game loses force feedback
+      fixed it (real G920s hit the same). Force feedback works on Proton 11, the strongest
+      of the three games so far. Switching modes mid-game loses force feedback
       (the game sets effects up on the wheel it found at launch). A switch also once killed
       slot 1's thread with EINVAL from a withdrawn force-feedback request; such requests are
       now skipped, and a failed slot restarts. Still to look at: SnowRunner forgets the
