@@ -172,6 +172,15 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       into a turn while driving: the rim should be pulled back towards centre; if it's pushed
       further into the turn, flip the sign. `docs/probes/scripts/ff-test.py` checks the
       driver side on its own.
+    - **First Deck test (rc1, SnowRunner):** with Steam Input on, the game only got Steam's
+      virtual pad (after Steam's wheel wizard), so no forces; with Steam Input forced off for
+      the game it saw no wheel input at all, menus included (the wheel was a plain joystick,
+      with no gamepad mapping). The wheel never centred at rest: SDL turns the autocentre off
+      on open and Steam keeps it open. Fixed for rc2: the autocentre stays on until a game
+      uploads a force, and the wheel has a gamepad layout by default (SDL maps it as a
+      gamepad, with haptics), `wheel_layout = "joystick"` for the old one. To test: Steam
+      Input off for generic controllers only, then the menus and forces in SnowRunner, with
+      `X360TRUEWIRELESS_FF_LOG`. If the game skips the wheel as a gamepad, try joystick.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.

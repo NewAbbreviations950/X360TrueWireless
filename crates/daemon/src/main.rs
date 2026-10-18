@@ -422,9 +422,14 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
 fn new_controller(slot: u8, device: Device) -> Result<Controller> {
     Ok(match device {
         Device::Wheel => {
-            eprintln!("slot {slot}: racing wheel");
+            // Read when the wheel connects, so a changed layout applies on the next connect.
+            let layout = x360truewireless_common::config::Config::load()
+                .ok()
+                .and_then(|c| c.wheel_layout)
+                .unwrap_or_default();
+            eprintln!("slot {slot}: racing wheel ({layout:?} layout)");
             Controller::Wheel(
-                Wheel::new().context("create virtual wheel")?,
+                Wheel::new(layout).context("create virtual wheel")?,
                 wheel_ff::Encoder::new(),
             )
         }

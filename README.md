@@ -75,7 +75,15 @@ needs it.
 
 Wheels are recognised when they connect, so there's nothing to set up, and any mix of up to
 four wheels and controllers works. Each wheel shows up as its own "Microsoft Xbox 360
-Wireless Racing Wheel" joystick.
+Wireless Racing Wheel" device, with gamepad buttons so game menus work with it. Its wheel
+centres itself whenever no game is driving it.
+
+With Steam Input on, games get Steam's virtual pad in place of the wheel, which has rumble
+but no force feedback. So games need to see the wheel itself: turn Steam Input off for
+generic controllers in Steam's controller settings. That
+leaves your Xbox controllers on Steam Input as before. For a game that ignores the wheel
+because it looks like a gamepad, set `wheel_layout = "joystick"` (see Configuration) and
+reconnect the wheel.
 
 ## Configuration
 
@@ -94,6 +102,9 @@ variant = ""
 [keys.green]
 E = "KEY_F5"
 ```
+
+`wheel_layout = "joystick"` (a top-level setting, above any `[keys…]` section) makes racing
+wheels show up as a plain joystick instead of a gamepad. It applies when a wheel connects.
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
 the tray menu, or run `systemctl --user restart x360truewireless`.

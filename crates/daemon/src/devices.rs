@@ -11,6 +11,7 @@ use evdev::{
     AbsInfo, AbsoluteAxisCode, AttributeSet, BusType, EventSummary, EventType, FFEffectCode,
     FFEffectKind, InputEvent, InputId, KeyCode, UInputCode, UinputAbsSetup,
 };
+use x360truewireless_common::config::WheelLayout;
 use x360truewireless_proto::{ChatpadKey, ChatpadKeys, GamepadState, button, led, modifier};
 
 use crate::ffb;
@@ -226,15 +227,15 @@ impl Pad {
     }
 }
 
-/// A racing wheel is a plain joystick rather than an Xbox pad, so Steam Input leaves it
-/// alone and games get its force feedback. The ID is pid.codes' test PID, which no gamepad
-/// mapping database knows.
+/// A racing wheel isn't an Xbox pad, so Steam Input doesn't hand games its own virtual pad
+/// in place of it (which has rumble only) unless it's set up to. The ID is pid.codes' test
+/// PID, which no gamepad mapping database knows.
 const WHEEL_ID: (u16, u16, u16) = (0x1209, 0x0001, 0x0001);
 const WHEEL_NAME: &str = "Microsoft Xbox 360 Wireless Racing Wheel";
 
-/// Joystick buttons rather than gamepad ones (`BTN_SOUTH`…), so SDL doesn't guess a gamepad
-/// mapping for the wheel either.
-const WHEEL_BUTTONS: &[(u16, KeyCode)] = &[
+/// Joystick buttons for `WheelLayout::Joystick`, so SDL doesn't guess a gamepad mapping.
+/// The gamepad layout uses the pad's `BUTTONS`.
+const JOYSTICK_BUTTONS: &[(u16, KeyCode)] = &[
     (button::A, KeyCode::BTN_TRIGGER),
     (button::B, KeyCode::BTN_THUMB),
     (button::X, KeyCode::BTN_THUMB2),
@@ -268,14 +269,22 @@ const WHEEL_FF: &[FFEffectCode] = &[
     FFEffectCode::FF_AUTOCENTER,
 ];
 
+fn buttons(layout: WheelLayout) -> &'static [(u16, KeyCode)] {
+    match layout {
+        WheelLayout::Gamepad => BUTTONS,
+        WheelLayout::Joystick => JOYSTICK_BUTTONS,
+    }
+}
+
 pub struct Wheel {
     dev: VirtualDevice,
+    layout: WheelLayout,
     effects: HashMap<i16, ffb::Effect>,
 }
 
 impl Wheel {
-    pub fn new() -> io::Result<Self> {
-        let keys: AttributeSet<KeyCode> = WHEEL_BUTTONS.iter().map(|&(_, k)| k).collect();
+    pub fn new(layout: WheelLayout) -> io::Result<Self> {
+        let keys: AttributeSet<KeyCode> = buttons(layout).iter().map(|&(_, k)| k).collect();
         let stick = AbsInfo::new(0, -32768, 32767, 0, 0, 0);
         let pedal = AbsInfo::new(0, 0, 255, 0, 0, 0);
         let hat = AbsInfo::new(0, -1, 1, 0, 0, 0);
@@ -306,15 +315,21 @@ impl Wheel {
         set_nonblocking(&dev)?;
         Ok(Wheel {
             dev,
+            layout,
             effects: HashMap::new(),
         })
     }
 
-    /// XInput reports a wheel like a pad: steering on LX, throttle on RT, brake on LT. Those
-    /// become X, Z and RZ. The other stick values go to Y, RX and RY until a capture shows
-    /// whether the wheel uses them.
+    /// XInput reports a wheel like a pad: steering on LX, throttle on RT, brake on LT.
+    /// Steering is X; the pedals are Z and RZ, in the pad's order for the gamepad layout and
+    /// throttle first for the joystick. The other stick values go to Y, RX and RY until a
+    /// capture shows whether the wheel uses them.
     pub fn emit(&mut self, s: &GamepadState) -> io::Result<()> {
-        let mut events: Vec<InputEvent> = WHEEL_BUTTONS
+        let (z, rz) = match self.layout {
+            WheelLayout::Gamepad => (s.lt, s.rt),
+            WheelLayout::Joystick => (s.rt, s.lt),
+        };
+        let mut events: Vec<InputEvent> = buttons(self.layout)
             .iter()
             .map(|&(bit, key)| {
                 InputEvent::new(EventType::KEY.0, key.0, (s.buttons & bit != 0) as i32)
@@ -327,8 +342,8 @@ impl Wheel {
             (AbsoluteAxisCode::ABS_Y, !s.ly as i32),
             (AbsoluteAxisCode::ABS_RX, s.rx as i32),
             (AbsoluteAxisCode::ABS_RY, !s.ry as i32),
-            (AbsoluteAxisCode::ABS_Z, s.rt as i32),
-            (AbsoluteAxisCode::ABS_RZ, s.lt as i32),
+            (AbsoluteAxisCode::ABS_Z, z as i32),
+            (AbsoluteAxisCode::ABS_RZ, rz as i32),
             (
                 AbsoluteAxisCode::ABS_HAT0X,
                 dir(button::DPAD_LEFT, button::DPAD_RIGHT),
@@ -582,7 +597,7 @@ mod tests {
     fn wheel_reports_uploaded_effects() {
         use evdev::{FFEffectData, FFEnvelope, FFReplay, FFTrigger};
 
-        let mut wheel = Wheel::new().unwrap();
+        let mut wheel = Wheel::new(WheelLayout::Joystick).unwrap();
         let node = wheel
             .dev
             .enumerate_dev_nodes_blocking()
