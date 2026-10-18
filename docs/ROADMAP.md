@@ -178,9 +178,13 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       with no gamepad mapping). The wheel never centred at rest: SDL turns the autocentre off
       on open and Steam keeps it open. Fixed for rc2: the autocentre stays on until a game
       uploads a force, and the wheel has a gamepad layout by default (SDL maps it as a
-      gamepad, with haptics), `wheel_layout = "joystick"` for the old one. To test: Steam
-      Input off for generic controllers only, then the menus and forces in SnowRunner, with
-      `X360TRUEWIRELESS_FF_LOG`. If the game skips the wheel as a gamepad, try joystick.
+      gamepad, with haptics). rc3 adds the popup's Racing wheel modes (`wheel_mode`): sim
+      wheel (that layout), Xbox controller (a plain 360 pad with rumble and the native
+      autocentre, for games without wheel support) and joystick (the old layout); switching
+      replaces the device at once. To test: Steam Input off for generic controllers only,
+      then the menus and forces in SnowRunner, with `X360TRUEWIRELESS_FF_LOG`. If the game
+      skips the wheel as a gamepad, try joystick. Also check the Xbox controller mode with
+      Steam Input on, and switching with the wheel connected.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.

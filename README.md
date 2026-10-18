@@ -74,16 +74,19 @@ effects are accepted but don't play yet. Keep the wheel on its AC adapter: force
 needs it.
 
 Wheels are recognised when they connect, so there's nothing to set up, and any mix of up to
-four wheels and controllers works. Each wheel shows up as its own "Microsoft Xbox 360
-Wireless Racing Wheel" device, with gamepad buttons so game menus work with it. Its wheel
-centres itself whenever no game is driving it.
+four wheels and controllers works. The wheel centres itself whenever no game is driving it.
 
-With Steam Input on, games get Steam's virtual pad in place of the wheel, which has rumble
-but no force feedback. So games need to see the wheel itself: turn Steam Input off for
-generic controllers in Steam's controller settings. That
-leaves your Xbox controllers on Steam Input as before. For a game that ignores the wheel
-because it looks like a gamepad, set `wheel_layout = "joystick"` (see Configuration) and
-reconnect the wheel.
+Choose how wheels show up under **Racing wheel** in the settings popup. The change applies
+right away, so switch before starting a game:
+- **Sim wheel** (default): a "Microsoft Xbox 360 Wireless Racing Wheel" with force feedback,
+  for games with wheel support. It has gamepad buttons, so game menus work with it. With
+  Steam Input on, games get Steam's virtual pad in place of the wheel, which has rumble but
+  no force feedback, so turn Steam Input off for generic controllers in Steam's controller
+  settings. Your Xbox controllers stay on Steam Input.
+- **Xbox controller**: an ordinary Xbox 360 controller, for games without wheel support.
+  Steering is the left stick, and you get rumble and the wheel's own centring.
+- **Joystick**: a sim wheel without gamepad buttons, for games that ignore the wheel because
+  it looks like a gamepad.
 
 ## Configuration
 
@@ -103,8 +106,8 @@ variant = ""
 E = "KEY_F5"
 ```
 
-`wheel_layout = "joystick"` (a top-level setting, above any `[keys…]` section) makes racing
-wheels show up as a plain joystick instead of a gamepad. It applies when a wheel connects.
+`wheel_mode` (a top-level setting, above any `[keys…]` section) is the popup's Racing wheel
+choice: `"wheel"` (default), `"controller"` or `"joystick"`.
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
 the tray menu, or run `systemctl --user restart x360truewireless`.
