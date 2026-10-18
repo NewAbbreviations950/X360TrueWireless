@@ -43,7 +43,11 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
   v0.1.1, under the old names). Rename it to `X360TrueWireless` (GitHub redirects the old
   links), then push `dev`, merge into `main` and tag v0.2.0 together: the new installer
   downloads `x360truewireless-x86_64-linux.tar.gz` from the latest release, which v0.1.1
-  doesn't have. Then update the Steam Deck with the README's curl command.
+  doesn't have. Before that, test on the Steam Deck (which has the old install) with a
+  pre-release: tag `v0.2.0-rc1` on `dev` (tags with a `-` are published as pre-releases,
+  which "latest" skips) and run
+  `curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireless/dev/install.sh | X360TRUEWIRELESS_VERSION=v0.2.0-rc1 bash`.
+  Check that it replaces the old install and keeps the settings, then try SnowRunner.
 - **Test on Steam Deck** (desktop + game mode) and **Kubuntu**:
   - Steam sees exactly one pad per controller.
   - Chatpad types in game mode.

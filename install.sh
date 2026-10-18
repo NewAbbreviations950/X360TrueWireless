@@ -3,6 +3,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireless/main/install.sh | bash
 #   ... | bash -s -- --uninstall
+#   ... | X360TRUEWIRELESS_VERSION=v0.2.0-rc1 bash   # a specific (pre-)release instead of the latest
 #   ./install.sh --local        # from a checkout: build and install the working tree
 #
 # Everything goes in your home directory except one udev rule (needs sudo once), which lets
@@ -151,9 +152,13 @@ stage_local() {
 stage_release() {
     command -v curl >/dev/null || die "curl is required"
     [ "$(uname -m)" = "x86_64" ] || die "only x86_64 builds are published so far"
-    local base="https://github.com/$REPO/releases/latest/download"
+    local base="https://github.com/$REPO/releases/latest/download" which="latest release"
+    if [ -n "${X360TRUEWIRELESS_VERSION:-}" ]; then
+        base="https://github.com/$REPO/releases/download/$X360TRUEWIRELESS_VERSION"
+        which="release $X360TRUEWIRELESS_VERSION"
+    fi
     STAGE="$(mktemp -d)"
-    say "Downloading latest release from github.com/$REPO"
+    say "Downloading $which from github.com/$REPO"
     curl -fsSL "$base/$ASSET" -o "$STAGE/$ASSET"
     curl -fsSL "$base/SHA256SUMS" -o "$STAGE/SHA256SUMS"
     (cd "$STAGE" && grep " $ASSET\$" SHA256SUMS | sha256sum -c --quiet -) || die "checksum mismatch; aborting"

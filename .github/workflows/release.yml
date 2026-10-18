@@ -26,4 +26,8 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes x360truewireless-x86_64-linux.tar.gz SHA256SUMS
+        # Tags with a suffix (v0.2.0-rc1) are pre-releases: the installer's default "latest"
+        # skips them, so they can be tried with X360TRUEWIRELESS_VERSION first.
+        run: |
+          pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--prerelease"
+          gh release create "$GITHUB_REF_NAME" $pre --generate-notes x360truewireless-x86_64-linux.tar.gz SHA256SUMS
