@@ -295,6 +295,7 @@ mod tests {
                     layout: "no".into(),
                     connected: connected.into(),
                     battery: battery.into(),
+                    devices: Vec::new(),
                 }),
             },
             icons: Vec::new(),

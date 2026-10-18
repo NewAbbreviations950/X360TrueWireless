@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use x360truewireless_common::dbus::{BUS_NAME, INTERFACE, OBJECT_PATH};
+use x360truewireless_common::dbus::{BUS_NAME, INTERFACE, OBJECT_PATH, SlotDevice};
 use x360truewireless_common::{Battery, ChatpadKey};
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -19,6 +19,8 @@ pub struct DaemonStatus {
     pub connected: Vec<bool>,
     /// Per slot: the battery level, or None when unknown (or the slot is empty).
     pub battery: Vec<Option<Battery>>,
+    /// Per slot: what's connected.
+    pub devices: Vec<SlotDevice>,
 }
 
 pub struct Client {
@@ -47,10 +49,25 @@ impl Client {
                 .into_iter()
                 .map(Battery::from_bars)
                 .collect();
+            // A daemon from before `Devices` existed only says which slots are connected.
+            let devices = match p.call::<_, _, Vec<u8>>("Devices", &()) {
+                Ok(codes) => codes.into_iter().map(SlotDevice::from_code).collect(),
+                Err(_) => connected
+                    .iter()
+                    .map(|&c| {
+                        if c {
+                            SlotDevice::Controller
+                        } else {
+                            SlotDevice::Empty
+                        }
+                    })
+                    .collect(),
+            };
             Some(DaemonStatus {
                 layout,
                 connected,
                 battery,
+                devices,
             })
         });
         Status { running }

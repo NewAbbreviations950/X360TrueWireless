@@ -5,8 +5,6 @@
 //! below, for a top panel) the click position, kept inside the usable screen area. On X11 the
 //! window is positioned directly instead. Elsewhere it opens wherever the compositor likes.
 
-use std::time::Duration;
-
 const PLUGIN: &str = "x360truewireless-popup-placement";
 
 /// Where to put the popup: the point that was clicked (global coordinates), if known.
@@ -31,12 +29,17 @@ impl Anchor {
     }
 }
 
-pub fn is_kde_wayland() -> bool {
+pub fn is_wayland() -> bool {
     std::env::var_os("WAYLAND_DISPLAY").is_some()
+}
+
+pub fn is_kde_wayland() -> bool {
+    is_wayland()
         && std::env::var("XDG_CURRENT_DESKTOP").is_ok_and(|d| d.split(':').any(|p| p == "KDE"))
 }
 
-/// Ask KWin to place the window with app id `app_id` when it appears. Without an anchor it goes
+/// Ask KWin to place the window with app id `app_id` when it appears, and again whenever it
+/// changes size (moves are left alone, so it can still be dragged). Without an anchor it goes
 /// to the corner nearest the usual tray position (bottom right). Returns a guard that removes
 /// the script again.
 pub fn kwin_place(app_id: &str, anchor: Option<Anchor>, size: [f32; 2]) -> Option<ScriptGuard> {
@@ -66,9 +69,21 @@ function place(w) {{
     py = Math.max(area.y + margin, Math.min(py, area.y + area.height - height - margin));
     w.frameGeometry = {{ x: Math.round(px), y: Math.round(py), width: width, height: height }};
 }}
+function watch(w) {{
+    if (!w || w.resourceClass != appId) return;
+    place(w);
+    let width = w.frameGeometry.width, height = w.frameGeometry.height;
+    w.frameGeometryChanged.connect(function () {{
+        const g = w.frameGeometry;
+        if (g.width == width && g.height == height) return;
+        width = g.width;
+        height = g.height;
+        place(w);
+    }});
+}}
 // KWin 6 calls them windows, KWin 5 clients.
 const added = workspace.windowAdded || workspace.clientAdded;
-added.connect(place);
+added.connect(watch);
 "#,
         width = size[0],
         height = size[1],
@@ -99,16 +114,6 @@ added.connect(place);
 pub struct ScriptGuard {
     conn: zbus::blocking::Connection,
     path: std::path::PathBuf,
-}
-
-impl ScriptGuard {
-    /// Remove the script once the window has been placed.
-    pub fn remove_later(self, after: Duration) {
-        std::thread::spawn(move || {
-            std::thread::sleep(after);
-            drop(self);
-        });
-    }
 }
 
 impl Drop for ScriptGuard {

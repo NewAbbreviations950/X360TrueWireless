@@ -56,11 +56,14 @@ on non-US layouts too. Characters your layout can't type are skipped.
 ## Tray icon and settings
 
 A controller icon in the system tray shows the driver status and the connected players.
-Clicking it opens a small settings popup:
-- See which players are connected.
-- Remap any chatpad key on each layer: click a key, or press it on the chatpad, then type
-  a character or pick a special key. Changes apply immediately.
-- Choose the keyboard layout: automatic, or a fixed one.
+Clicking it opens a small popup with a box for each connected slot, showing what's
+connected (a controller, a controller with a chatpad, or a wheel) and its battery:
+- **Remap keys** (controllers with a chatpad): click a key, or press it on the chatpad, then
+  type a character or pick a special key, on each layer. The keys apply to every chatpad,
+  and changes apply immediately.
+- **Wheel mode** (racing wheels): how games see the wheel, see below.
+- The gear button opens settings: the keyboard layout (automatic, or a fixed one), and
+  restarting the driver.
 
 The popup is also in your app menu as **X360TrueWireless Settings**. That's the way in on GNOME
 unless you install the "AppIndicator and KStatusNotifierItem Support" extension.
@@ -76,8 +79,8 @@ needs it.
 Wheels are recognised when they connect, so there's nothing to set up, and any mix of up to
 four wheels and controllers works. The wheel centres itself whenever no game is driving it.
 
-Choose how wheels show up under **Racing wheel** in the settings popup. The change applies
-right away, so switch before starting a game:
+Choose how wheels show up in the wheel's box in the popup. The choice applies to every
+wheel, and right away, so switch before starting a game:
 - **Thrustmaster TMX** (default): games see a Thrustmaster TMX, Thrustmaster's Xbox-layout
   wheel with two pedals, with force feedback. Games with a TMX profile set up the buttons
   and pedals themselves.

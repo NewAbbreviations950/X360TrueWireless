@@ -65,6 +65,19 @@ impl Service {
             .collect();
         Ok(bars)
     }
+
+    /// What each of the four slots has connected, as `SlotDevice` codes.
+    fn devices(&self) -> zbus::fdo::Result<Vec<u8>> {
+        let shared = self
+            .shared
+            .upgrade()
+            .ok_or(zbus::fdo::Error::Failed("shutting down".into()))?;
+        Ok(shared
+            .devices
+            .iter()
+            .map(|d| d.load(Ordering::SeqCst))
+            .collect())
+    }
 }
 
 /// Start the service. Without a session bus (or if another daemon owns the name) we carry on

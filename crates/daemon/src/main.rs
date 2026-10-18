@@ -21,6 +21,7 @@ use anyhow::{Context, Result};
 use nusb::transfer::{Buffer, In, Interrupt, Out, TransferError};
 use nusb::{DeviceInfo, Endpoint, MaybeFuture};
 use x360truewireless_common::config::WheelMode;
+use x360truewireless_common::dbus::SlotDevice;
 use x360truewireless_proto::{Battery, ChatpadEvent, Device, InPacket, out, parse};
 
 use devices::{ChatpadState, Pad, Wheel, WheelLayout};
@@ -39,6 +40,9 @@ const DEVICE_TYPE_TIMEOUT: Duration = Duration::from_secs(3);
 const DEVICE_REQUEST_INTERVAL: Duration = Duration::from_millis(250);
 /// How often to re-read a connected controller's battery level.
 const BATTERY_REQUEST_INTERVAL: Duration = Duration::from_secs(5 * 60);
+/// An attached chatpad sends a status packet every second, even while idle; this long without
+/// one means it was taken off.
+const CHATPAD_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// What a connected controller looks like to games.
 enum Controller {
@@ -88,6 +92,8 @@ struct Shared {
     connected: [AtomicBool; SLOTS as usize],
     /// Last battery level reported per slot, as bars (1–4); 0 = unknown.
     battery: [AtomicU8; SLOTS as usize],
+    /// What each slot has connected, as `SlotDevice` codes.
+    devices: [AtomicU8; SLOTS as usize],
     /// Session bus connection, if available, for status and key signals.
     dbus: Option<zbus::blocking::Connection>,
     keyboard: Mutex<Keyboard>,
@@ -142,6 +148,7 @@ fn main() -> Result<()> {
         wheel_mode: RwLock::new(wheel_mode),
         connected: Default::default(),
         battery: Default::default(),
+        devices: Default::default(),
         dbus: dbus::serve(weak.clone()),
         keyboard: Mutex::new(keyboard),
         caps_lock: AtomicBool::new(false),
@@ -283,6 +290,9 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     let mut keepalive_phase = false;
     let mut next_keepalive = Instant::now();
     let mut next_battery_request = Instant::now();
+    // When the chatpad last sent anything, to tell whether one is attached.
+    let mut chatpad_seen: Option<Instant> = None;
+    let mut shown = SlotDevice::Empty;
 
     let result = (|| -> Result<()> {
         while shared.running.load(Ordering::SeqCst) {
@@ -321,6 +331,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             controller = None;
                             pending = None;
                             guessed = false;
+                            chatpad_seen = None;
                             shared.set_connected(slot, false);
                             let out = chatpad.release_all(&shared.keymap.read().unwrap());
                             shared.type_keys(&out.keys)?;
@@ -371,12 +382,15 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             shared.set_battery(slot, level)
                         }
                         InPacket::Chatpad(ChatpadEvent::WakeRequest) => {
+                            chatpad_seen = Some(Instant::now());
                             send(&mut ep_out, &out::chatpad_wake_ack())?
                         }
                         InPacket::Chatpad(ChatpadEvent::Active { leds }) => {
+                            chatpad_seen = Some(Instant::now());
                             indicators.on_status(leds)
                         }
                         InPacket::Chatpad(ChatpadEvent::Keys(keys)) => {
+                            chatpad_seen = Some(Instant::now());
                             let out = chatpad.update(keys, &shared.keymap.read().unwrap());
                             shared.type_keys(&out.keys)?;
                             for key in &out.pressed {
@@ -472,6 +486,31 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                     }
                 }
                 None => {}
+            }
+            // Tell the settings app what's connected.
+            let device = match &controller {
+                None if pending.is_some() => SlotDevice::Connecting,
+                None => SlotDevice::Empty,
+                Some(Controller::Pad(_))
+                    if chatpad_seen.is_some_and(|t| t.elapsed() < CHATPAD_TIMEOUT) =>
+                {
+                    SlotDevice::Chatpad
+                }
+                Some(Controller::Pad(_)) => SlotDevice::Controller,
+                Some(Controller::Wheel(..) | Controller::WheelPad(_)) => SlotDevice::Wheel,
+            };
+            if device != shown {
+                match (shown, device) {
+                    (SlotDevice::Controller, SlotDevice::Chatpad) => {
+                        eprintln!("slot {slot}: chatpad attached")
+                    }
+                    (SlotDevice::Chatpad, SlotDevice::Controller) => {
+                        eprintln!("slot {slot}: chatpad removed")
+                    }
+                    _ => {}
+                }
+                shown = device;
+                shared.devices[slot as usize].store(device.code(), Ordering::SeqCst);
             }
             // The link info only gives the battery level at connect time, so ask again now and then.
             if matches!(controller, Some(Controller::Pad(_)))
