@@ -311,8 +311,13 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   turn. Bits 0–1 of `AA` always draw `df` (an error, or a different operation), and bytes
   2, 6 and 7 never change the reply. With index `01`, action 2 (`08`/`20`/`80`) sets that
   slot's reply bit and action 1 doesn't (`0c` also does for the first slot), so 2 is
-  probably "start" and the bit "playing". Starting index 1 this way (any byte 2, constant
-  block `7f`/`80` ×6) still didn't move the rim.
+  probably "start". The bit doesn't show that the effect plays, though: index `7f` (nothing
+  loaded) answers the same, and indices with bit 7 set also set it for action 1.
+- Started with `0b 08 00 01` (2026-10-18 night, weight on, none moved): constant blocks with
+  one magnitude byte (`7f`/`80`/`ff`/`40`/`c0`) in each position and the rest zero, or a
+  16-bit value (`ff 7f`, `01 80`, `00 7f`…) at bytes 2/4/6, for block controls `05`–`07` and
+  durations `ff`/`00`; and device gain `0b 40`–`7f` (8 steps) × effect gain `ff`/`7f`/`40` ×
+  three magnitudes × two durations, with the gain set in a step of its own.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
