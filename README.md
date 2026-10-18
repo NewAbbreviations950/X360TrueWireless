@@ -15,6 +15,9 @@ gives it back when stopped). It exposes:
 - **a virtual racing wheel** for the Wireless Racing Wheel, with force feedback
   (experimental, see below).
 
+Planned: headset audio, both the wired headset plugged into a controller (or the wheel) and
+the Xbox 360 Wireless Headset, once the hardware is on hand to work out the protocol.
+
 ## Install
 
 ```sh

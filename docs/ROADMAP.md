@@ -63,13 +63,21 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
   boundary) are in `docs/protocol.md`.
 - **Automatic layout change detection:** right now it needs a manual Reload from the tray.
   The daemon could watch `kxkbrc`/gsettings instead.
-- **Headset audio:** the odd-numbered interfaces (protocol 0x82, interrupt endpoints) carry
-  the headset. The format is undocumented. Research it, then expose a PipeWire sink and
+- **Headset audio (planned once the hardware arrives):** both the wired headset plugged into
+  a controller's (or the wheel's) jack and the Xbox 360 Wireless Headset, which pairs with the
+  receiver by itself. The odd-numbered interfaces (protocol 0x82, interrupt endpoints) carry
+  headset audio. The format is undocumented. Research it, then expose a PipeWire sink and
   source.
   - No headset on hand yet (expected in a few weeks). The racing wheel has a headset jack too.
   - First test once it's here: read registers 0–4 (`docs/protocol.md`, register reads) on the
     controller and the wheel with the headset unplugged and plugged in. Register 0 reads `20`
     on a controller with the chatpad and `03` on the wheel, so it may be an attachment field.
+  - Also compare the link info of a controller without its chatpad: register 5 (device type,
+    used to detect wheels) reads `01` with the chatpad attached; check that no attachment
+    changes it.
+  - Wireless headset: find out whether it takes a slot of its own (its own presence and link
+    info, and what register 5 reads) or shares its controller's, and make sure it doesn't get
+    a virtual gamepad.
   - The dump tool only reads the controller interfaces; make it log the audio endpoints too,
     so traffic there shows up during probes.
 - **Unknown packets:** `00 f8 0N` (seen while the chatpad wasn't handshaked, and once from the
