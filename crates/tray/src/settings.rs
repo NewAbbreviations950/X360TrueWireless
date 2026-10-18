@@ -529,17 +529,17 @@ impl Settings {
             ui.label("Racing wheel");
             for (mode, label, tip) in [
                 (
-                    WheelMode::Logitech,
-                    "Logitech G920",
-                    "A force-feedback wheel that games see as a Logitech G920, so games with \
-                     a G920 profile set up its buttons and pedals themselves. Turn Steam \
+                    WheelMode::Thrustmaster,
+                    "Thrustmaster TMX",
+                    "A force-feedback wheel that games see as a Thrustmaster TMX, so games \
+                     with a TMX profile set up its buttons and pedals themselves. Turn Steam \
                      Input off for generic controllers so games see the wheel itself.",
                 ),
                 (
-                    WheelMode::Generic,
-                    "Generic wheel",
-                    "A generic force-feedback wheel, for games without a G920 profile. Bind \
-                     its buttons and pedals in the game.",
+                    WheelMode::Logitech,
+                    "Logitech G920",
+                    "The same wheel shown as a Logitech G920, for games with a G920 profile \
+                     but none for the TMX.",
                 ),
                 (
                     WheelMode::Controller,

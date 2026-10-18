@@ -55,8 +55,8 @@ impl Controller {
         match self {
             Controller::Pad(_) => None,
             Controller::Wheel(wheel, _) => Some(match wheel.layout() {
+                WheelLayout::Tmx => WheelMode::Thrustmaster,
                 WheelLayout::G920 => WheelMode::Logitech,
-                WheelLayout::Generic => WheelMode::Generic,
             }),
             Controller::WheelPad(_) => Some(WheelMode::Controller),
         }
@@ -554,8 +554,8 @@ fn new_controller(
             let mode = *shared.wheel_mode.read().unwrap();
             eprintln!("slot {slot}: racing wheel ({mode:?} mode)");
             let layout = match mode {
+                WheelMode::Thrustmaster => WheelLayout::Tmx,
                 WheelMode::Logitech => WheelLayout::G920,
-                WheelMode::Generic => WheelLayout::Generic,
                 WheelMode::Controller => {
                     // No game forces in this mode: just the wheel's own autocentre.
                     for p in wheel_ff::Encoder::autocentre_only() {

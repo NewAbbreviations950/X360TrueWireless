@@ -229,22 +229,45 @@ impl Pad {
 /// Which wheel the virtual wheel presents itself as. SDL decides a joystick is a wheel only
 /// from a list of USB IDs, and Proton presents only those to games as DirectInput driving
 /// devices with full force feedback; games such as SnowRunner list nothing else as a wheel.
-/// So both layouts take an ID from that list.
+/// So both layouts take an ID from that list, and copy that wheel's buttons and axes so games
+/// load their own profile for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WheelLayout {
-    /// A Logitech G920, the Xbox-layout Logitech wheel, so games load their own G920 profile
-    /// (button numbers and axes from DiRT 4's `input/actionmaps/lg_g920.xml`).
+    /// A Thrustmaster TMX, Thrustmaster's Xbox-layout wheel, with two pedals like the 360
+    /// wheel. Its report descriptor (from a USB capture of one, in emtek995/TMX-driver's
+    /// `wheel.log`) has X steering, Y brake, Z rotation throttle, a slider clutch, 13 buttons
+    /// and a hat. Button numbers are from DiRT 4's `input/actionmaps/tm_tmx.xml`.
+    Tmx,
+    /// A Logitech G920, the Xbox-layout Logitech wheel (button numbers and axes from DiRT 4's
+    /// `input/actionmaps/lg_g920.xml`).
     G920,
-    /// The OpenFFBoard's ID (a generic open-source force-feedback wheel, in pid.codes' open
-    /// VID), for games without a G920 profile; everything has to be bound in the game.
-    /// Gamepad buttons let SDL map it as a gamepad too, which Proton ignores for wheels.
-    Generic,
 }
 
-const GENERIC_ID: (u16, u16, u16) = (0x1209, 0xffb0, 0x0001);
-const GENERIC_NAME: &str = "Microsoft Xbox 360 Wireless Racing Wheel";
+const TMX_ID: (u16, u16, u16) = (0x044f, 0xb67f, 0x0100);
+const TMX_NAME: &str = "Thrustmaster TMX Racing Wheel";
 const G920_ID: (u16, u16, u16) = (0x046d, 0xc262, 0x0111);
 const G920_NAME: &str = "Logitech G920 Driving Force Racing Wheel";
+
+/// The TMX's DirectInput buttons in order, from what DiRT 4's TMX profile binds to each:
+/// left paddle (gear down), right paddle (gear up), X (headlights), left stick (look back),
+/// A (menu select), two unused, Menu (pause), B (menu back), Y (change view), right stick,
+/// View (menu select and voice), Xbox. Left stick, right stick, View and Xbox are a best
+/// guess; the rest match the G920 profile's choices for the same buttons.
+const TMX_BUTTONS: &[(u16, KeyCode)] = &[
+    (button::LB, KeyCode::BTN_TRIGGER),
+    (button::RB, KeyCode::BTN_THUMB),
+    (button::X, KeyCode::BTN_THUMB2),
+    (button::LS, KeyCode::BTN_TOP),
+    (button::A, KeyCode::BTN_TOP2),
+    (0, KeyCode::BTN_PINKIE),
+    (0, KeyCode::BTN_BASE),
+    (button::START, KeyCode::BTN_BASE2),
+    (button::B, KeyCode::BTN_BASE3),
+    (button::Y, KeyCode::BTN_BASE4),
+    (button::RS, KeyCode::BTN_BASE5),
+    (button::BACK, KeyCode::BTN_BASE6),
+    (button::GUIDE, KeyCode(0x12c)),
+];
 
 /// The G920's DirectInput buttons in order (SDL, and so Proton, numbers buttons by key code):
 /// A, B, X, Y, right paddle, left paddle, Menu, View, right stick, left stick, Xbox. The 360
@@ -285,32 +308,35 @@ const WHEEL_FF: &[FFEffectCode] = &[
 
 fn buttons(layout: WheelLayout) -> &'static [(u16, KeyCode)] {
     match layout {
+        WheelLayout::Tmx => TMX_BUTTONS,
         WheelLayout::G920 => G920_BUTTONS,
-        WheelLayout::Generic => BUTTONS,
     }
 }
 
 /// The axes in key-code order, which is the order SDL and Proton number them in. For the
-/// G920 Proton takes exactly four: steering, throttle, brake and clutch.
+/// G920 Proton takes exactly four: steering, throttle, brake and clutch. Other devices get
+/// X, Y, Z, X rotation, Y rotation, Z rotation and a slider in turn, so the TMX has three
+/// idle axes to put its throttle on Z rotation and its clutch on the slider.
 fn axes(layout: WheelLayout) -> Vec<(AbsoluteAxisCode, AbsInfo)> {
     let stick = AbsInfo::new(0, -32768, 32767, 0, 0, 0);
-    let pedal = AbsInfo::new(0, 0, 255, 0, 0, 0);
     let released = AbsInfo::new(255, 0, 255, 0, 0, 0);
+    let idle = AbsInfo::new(0, -1, 1, 0, 0, 0);
     let hat = AbsInfo::new(0, -1, 1, 0, 0, 0);
     let mut axes = match layout {
+        WheelLayout::Tmx => vec![
+            (AbsoluteAxisCode::ABS_X, stick),
+            (AbsoluteAxisCode::ABS_Y, released),
+            (AbsoluteAxisCode::ABS_Z, idle),
+            (AbsoluteAxisCode::ABS_RX, idle),
+            (AbsoluteAxisCode::ABS_RY, idle),
+            (AbsoluteAxisCode::ABS_RZ, released),
+            (AbsoluteAxisCode::ABS_THROTTLE, released),
+        ],
         WheelLayout::G920 => vec![
             (AbsoluteAxisCode::ABS_X, stick),
             (AbsoluteAxisCode::ABS_Y, released),
             (AbsoluteAxisCode::ABS_Z, released),
             (AbsoluteAxisCode::ABS_RZ, released),
-        ],
-        WheelLayout::Generic => vec![
-            (AbsoluteAxisCode::ABS_X, stick),
-            (AbsoluteAxisCode::ABS_Y, stick),
-            (AbsoluteAxisCode::ABS_RX, stick),
-            (AbsoluteAxisCode::ABS_RY, stick),
-            (AbsoluteAxisCode::ABS_Z, pedal),
-            (AbsoluteAxisCode::ABS_RZ, pedal),
         ],
     };
     axes.extend([
@@ -329,8 +355,8 @@ pub struct Wheel {
 impl Wheel {
     pub fn new(layout: WheelLayout) -> io::Result<Self> {
         let (id, name) = match layout {
+            WheelLayout::Tmx => (TMX_ID, TMX_NAME),
             WheelLayout::G920 => (G920_ID, G920_NAME),
-            WheelLayout::Generic => (GENERIC_ID, GENERIC_NAME),
         };
         let keys: AttributeSet<KeyCode> = buttons(layout).iter().map(|&(_, k)| k).collect();
         let mut builder = VirtualDevice::builder()?
@@ -366,23 +392,20 @@ impl Wheel {
         let dir =
             |neg: u16, pos: u16| (s.buttons & pos != 0) as i32 - (s.buttons & neg != 0) as i32;
         let mut axes = vec![(AbsoluteAxisCode::ABS_X, s.lx as i32)];
+        // Released pedals read full, as on both wheels. The 360 wheel has no clutch, so it
+        // stays released.
         match self.layout {
-            // Released pedals read full, as on a G920: throttle, brake and clutch (none, so
-            // always released). Proton's DirectInput renames a G920's Z to Z rotation
+            WheelLayout::Tmx => axes.extend([
+                (AbsoluteAxisCode::ABS_Y, 255 - s.lt as i32),
+                (AbsoluteAxisCode::ABS_RZ, 255 - s.rt as i32),
+                (AbsoluteAxisCode::ABS_THROTTLE, 255),
+            ]),
+            // Throttle, brake and clutch. Proton's DirectInput renames a G920's Z to Z rotation
             // ("Brake") and its Z rotation to a slider ("Clutch"), as on Windows.
             WheelLayout::G920 => axes.extend([
                 (AbsoluteAxisCode::ABS_Y, 255 - s.rt as i32),
                 (AbsoluteAxisCode::ABS_Z, 255 - s.lt as i32),
                 (AbsoluteAxisCode::ABS_RZ, 255),
-            ]),
-            // As on the pad. The other stick values go to Y, RX and RY until a capture shows
-            // whether the wheel uses them.
-            WheelLayout::Generic => axes.extend([
-                (AbsoluteAxisCode::ABS_Y, !s.ly as i32),
-                (AbsoluteAxisCode::ABS_RX, s.rx as i32),
-                (AbsoluteAxisCode::ABS_RY, !s.ry as i32),
-                (AbsoluteAxisCode::ABS_Z, s.lt as i32),
-                (AbsoluteAxisCode::ABS_RZ, s.rt as i32),
             ]),
         }
         axes.extend([
@@ -640,7 +663,7 @@ mod tests {
     fn wheel_reports_uploaded_effects() {
         use evdev::{FFEffectData, FFEnvelope, FFReplay, FFTrigger};
 
-        let mut wheel = Wheel::new(WheelLayout::Generic).unwrap();
+        let mut wheel = Wheel::new(WheelLayout::Tmx).unwrap();
         let node = wheel
             .dev
             .enumerate_dev_nodes_blocking()

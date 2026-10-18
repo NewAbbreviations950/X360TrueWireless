@@ -219,9 +219,22 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       to match Windows: Z becomes Z rotation "Brake" and Z rotation a slider "Clutch", so
       the brake goes on `ABS_Z` (rc6 had it on `ABS_RZ`, and DiRT saw it as the clutch). To test: DiRT 4 and SnowRunner pick it up without binding, the
       pedals and paddles work, and forces play. Caveat: G920 profiles assume 900° of
-      rotation and the 360 wheel has about 270°. Later: a Thrustmaster TMX mode (also in
-      DiRT 4's profiles, `tm_tmx.xml`) and older wheels with fewer buttons and pedals
-      (Driving Force GT, G25/G27) if a game needs them.
+      rotation and the 360 wheel has about 270°. Later: older wheels with fewer buttons and
+      pedals (Driving Force GT, G25/G27) if a game needs them.
+    - **rc7: Thrustmaster TMX mode (default), replacing the generic wheel.** Picked over
+      the T128, which is physically closer (two pedals, Xbox layout) but newer than most
+      games' profiles (DiRT 4 has none) and missing from SDL's wheel list, so Proton would
+      present it as a plain joystick. The TMX (044f:b67f, 2015) has two pedals and the Xbox
+      layout too, is in SDL's list and has a DiRT 4 profile. Its HID descriptor, from the
+      USB capture in emtek995/TMX-driver's `wheel.log`: X steering (16-bit), Y brake, Z
+      rotation throttle, slider clutch (10-bit), 13 buttons, a hat. Proton gives non-G920
+      devices X, Y, Z, X rotation, Y rotation, Z rotation, slider in SDL axis order, so the
+      wheel declares `ABS_X`, `ABS_Y`, three idle axes, `ABS_RZ` and `ABS_THROTTLE`.
+      Buttons 1–13 from what DiRT 4's `tm_tmx.xml` binds, matched against its G920 profile:
+      left paddle, right paddle, X, LSB, A, two unused, Menu, B, Y, RSB, View, Xbox. LSB,
+      RSB, View and Xbox are guesses (DiRT's TMX binds look back to button 4 and select to
+      button 12); check them in DiRT's controls screen. The old `generic` setting now
+      means the TMX.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.

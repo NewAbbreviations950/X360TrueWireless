@@ -76,15 +76,13 @@ needs it.
 Wheels are recognised when they connect, so there's nothing to set up, and any mix of up to
 four wheels and controllers works. The wheel centres itself whenever no game is driving it.
 
-Tested with DiRT 4 on the Steam Deck. SnowRunner sees the wheel and its buttons but sends it
-no force feedback.
-
 Choose how wheels show up under **Racing wheel** in the settings popup. The change applies
 right away, so switch before starting a game:
-- **Logitech G920** (default): games see a Logitech G920, Logitech's Xbox-layout wheel, with
-  force feedback. Games with a G920 profile set up the buttons and pedals themselves.
-- **Generic wheel**: a generic force-feedback wheel, for games without a G920 profile. Bind
-  its buttons and pedals in the game.
+- **Thrustmaster TMX** (default): games see a Thrustmaster TMX, Thrustmaster's Xbox-layout
+  wheel with two pedals, with force feedback. Games with a TMX profile set up the buttons
+  and pedals themselves.
+- **Logitech G920**: the same, shown as Logitech's Xbox-layout wheel, for games that have a
+  G920 profile but none for the TMX.
 - **Xbox controller**: an ordinary Xbox 360 controller, for games without wheel support.
   Steering is the left stick, and you get rumble and the wheel's own centring.
 
@@ -92,8 +90,8 @@ For both wheel modes, turn Steam Input off for generic controllers in Steam's co
 settings: with it on, games get Steam's virtual pad in place of the wheel, which has rumble
 but no force feedback. Your Xbox controllers stay on Steam Input.
 
-Tested with DiRT 4 on the Steam Deck (as a generic wheel). SnowRunner saw the generic wheel
-but sent it no force feedback.
+Tested with DiRT 4 on the Steam Deck. SnowRunner sees the wheel and its buttons but sends it
+no force feedback, because of a bug in Proton 11's DirectInput.
 
 ## Configuration
 
@@ -114,7 +112,7 @@ E = "KEY_F5"
 ```
 
 `wheel_mode` (a top-level setting, above any `[keys…]` section) is the popup's Racing wheel
-choice: `"logitech"` (default), `"generic"` or `"controller"`.
+choice: `"thrustmaster"` (default), `"logitech"` or `"controller"`.
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
 the tray menu, or run `systemctl --user restart x360truewireless`.
