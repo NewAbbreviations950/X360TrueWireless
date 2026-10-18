@@ -363,19 +363,32 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
     `09 01` don't stop it.
   - With the autocentre off and the weight on, the rim stays at whichever lock it reaches, so
     stop tests need the autocentre on.
-  - **With the autocentre on, only leftward (negative) forces act:** `40` and `7f` didn't move
-    the rim from its rest point left of centre, `c0` and `80` drove it to the left lock. With
-    the autocentre off (`0b 10`) both directions work. A driver should switch the autocentre
-    off while host effects play (and back on, `0b 20`, when they stop).
+  - **`0b 40`–`7f` is the device gain and scales every force**, the autocentre's included.
+    With the gain at `48` (what the probe scripts set), `40`/`7f` couldn't lift the weight to
+    the right while `c0`/`80` (helped by the weight) drove the rim to the left lock, which
+    looked at first like the autocentre blocking rightward forces. At `0b 7f`, `4f` pushed
+    the rim to +11,700 against the autocentre, and to the right lock with it off.
 - **Spring condition** (`04 ii CP PC NC PS NS DB`, the patent's order): with the autocentre
   off and the weight holding the rim left of centre, NC (byte 4) with NS (byte 6) pulled it
   back to centre (`00 00 7f 00 7f 00`, or all of PC…NS at `7f`), while PC/PS alone or any single
   byte did nothing. All six bytes at `7f` pulled the rim past centre to the right, so byte 2
   is the centre-point offset. The spring needs only the create and this block, then the start.
+- **Damper, inertia, friction** (types `09`, `0a`, `0b`, same condition block): tested by
+  starting the effect, then switching the autocentre off so the weight pulls the rim from
+  about −7,000 to its stop. Time from −9,000 to −19,000: 1.07–1.21 s with no effect; the
+  damper 1.31/1.46/1.60 s for coefficients `20`/`40`/`7f` (NC and PC set, saturations `7f`);
+  inertia 1.39–1.62 s and friction 1.22–1.65 s with no clear trend. So all three resist, but
+  weakly; the spring (`08`) at `20`, `40` or `7f` held the rim completely, and with
+  coefficients `ff` (−1) it let it fall.
 - **Second effect:** a constant force created at index 2 plays when started either as
   `0b 08 00 02` (first slot byte holding index 2) or `0b 20 00 00 02` (second slot byte).
 - **Envelope** (`03 ii …`): setting any one byte to `7f` with a `c0` force didn't visibly
   change the push (onset 0.2–0.8 s either way, like the all-zero envelope). Not mapped yet.
+- **Ramp:** create type `02` is accepted with block control `05` (other block controls are
+  rejected with status 4) and then plays like a constant force with the constant block
+  (`08`); the ramp block `05` is always rejected (status 5). Bytes 3–4 of the constant block
+  never acted as ramp levels. Types `0c`–`10` are accepted at create but reject every block.
+  So there may be no hardware ramp; the host can ramp a constant force with live updates.
 - **Periodic** (`07 ii …` + envelope): not mapped yet. Byte 2 alone does nothing; with byte 6
   or 7 also set the rim gets pushed, but with the weight rig only the leftward half shows
   (autocentre on) or the timing is irregular (off). Mapping magnitude/offset/phase/period is

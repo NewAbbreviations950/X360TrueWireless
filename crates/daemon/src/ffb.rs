@@ -3,7 +3,7 @@
 //! Like a USB PID device, the wheel plays effects by itself once they're uploaded (see the
 //! Microsoft patent cited in `docs/protocol.md`). So this keeps each effect as the game
 //! described it and only normalises units: forces are -1.0..=1.0 along the steering axis,
-//! times are `Duration`s. Encoding effects as wheel packets waits on the wire format.
+//! times are `Duration`s. `wheel_ff` encodes them as wheel packets.
 //!
 //! Uploads are read with our own ioctl rather than `evdev`'s `process_ff_upload`, whose
 //! `FFEffectKind::Damper`/`Inertia` drop the condition data (the coefficients).
@@ -23,8 +23,8 @@ pub struct Effect {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Kind {
-    /// Positive `force` is the game's +X direction (evdev direction `0x4000`). Which way
-    /// that turns the wheel is for the encoder to decide once it's been seen on hardware.
+    /// Positive `force` is the game's +X direction (evdev direction `0x4000`). `wheel_ff`
+    /// decides which way that turns the wheel.
     Constant { force: f32, envelope: Envelope },
     Ramp {
         start: f32,

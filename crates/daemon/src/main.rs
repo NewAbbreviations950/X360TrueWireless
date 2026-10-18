@@ -9,6 +9,7 @@ mod indicators;
 mod keyboard;
 mod keymap;
 mod layout;
+mod wheel_ff;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -35,7 +36,7 @@ const BATTERY_REQUEST_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// What a connected controller looks like to games.
 enum Controller {
     Pad(Pad),
-    Wheel(Wheel),
+    Wheel(Wheel, wheel_ff::Encoder),
 }
 
 /// Slots whose controller should be exposed as a racing wheel, from the comma-separated
@@ -261,7 +262,10 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             eprintln!("slot {slot}: controller connected");
                             controller = Some(if is_wheel {
                                 eprintln!("slot {slot}: exposing it as a racing wheel");
-                                Controller::Wheel(Wheel::new().context("create virtual wheel")?)
+                                Controller::Wheel(
+                                    Wheel::new().context("create virtual wheel")?,
+                                    wheel_ff::Encoder::new(),
+                                )
                             } else {
                                 Controller::Pad(Pad::new().context("create virtual pad")?)
                             });
@@ -280,7 +284,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                         }
                         InPacket::Gamepad(state) => match controller.as_mut() {
                             Some(Controller::Pad(pad)) => pad.emit(&state)?,
-                            Some(Controller::Wheel(wheel)) => wheel.emit(&state)?,
+                            Some(Controller::Wheel(wheel, _)) => wheel.emit(&state)?,
                             None => {}
                         },
                         InPacket::Battery(level) => shared.set_battery(slot, level),
@@ -329,12 +333,21 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                         send(&mut ep_out, &out::rumble(strong, weak))?;
                     }
                 }
-                Some(Controller::Wheel(wheel)) => {
-                    // Not sent to the wheel yet: its force-feedback packets are still unknown.
+                Some(Controller::Wheel(wheel, encoder)) => {
+                    let now = Instant::now();
+                    let mut packets = Vec::new();
                     for op in wheel.poll_ff()? {
                         if ff_log {
                             eprintln!("slot {slot}: ff {op:?}");
                         }
+                        encoder.op(op, now, &mut packets);
+                    }
+                    encoder.tick(now, &mut packets);
+                    for p in &packets {
+                        if ff_log {
+                            eprintln!("slot {slot}: ff -> {p:02x?}");
+                        }
+                        send(&mut ep_out, p)?;
                     }
                 }
                 None => {}
@@ -366,6 +379,13 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     if controller.is_some() {
         shared.set_connected(slot, false);
         let _ = send(&mut ep_out, &out::rumble(0, 0));
+    }
+    if let Some(Controller::Wheel(_, encoder)) = controller.as_mut() {
+        let mut packets = Vec::new();
+        encoder.stop_all(&mut packets);
+        for p in &packets {
+            let _ = send(&mut ep_out, p);
+        }
     }
     ep_in.cancel_all();
     result

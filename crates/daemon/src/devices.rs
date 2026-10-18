@@ -248,8 +248,8 @@ const WHEEL_BUTTONS: &[(u16, KeyCode)] = &[
     (button::RS, KeyCode::BTN_BASE5),
 ];
 
-/// Every effect type a wheel could play. Until the wheel's protocol is known, all of them
-/// are advertised so the log shows what games ask for; trim to what the wheel plays later.
+/// Every effect type a wheel could play. Periodic and ramp effects aren't played yet
+/// (`wheel_ff`), but they're still advertised so games that use them keep their other effects.
 const WHEEL_FF: &[FFEffectCode] = &[
     FFEffectCode::FF_CONSTANT,
     FFEffectCode::FF_RAMP,

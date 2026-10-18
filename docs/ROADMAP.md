@@ -117,11 +117,18 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       block, envelope block (`03`, needed for constant/periodic), then start with
       `0b 08 00 01` (stop `0b 04 00 01`). Constant block byte 2 is a signed force; duration
       is in ~10 ms units (`00` = until stopped); gain scales; a new parameter block updates
-      the playing effect live. The spring block is `CP PC NC PS NS DB`. The autocentre
-      must be off (`0b 10`) for rightward forces to act. Details in `docs/protocol.md`.
+      the playing effect live. The spring block is `CP PC NC PS NS DB`; damper/inertia/
+      friction resist only weakly. `0b 40`–`7f` is the device gain for every force. Details
+      in `docs/protocol.md`.
+    - **Encoder done** (`crates/daemon/src/wheel_ff.rs`): constant force, spring, damper,
+      inertia, friction and rumble; the daemon times delays, durations and repeats itself,
+      coalesces updates into parameter blocks, applies the game's gain to the effects and sets
+      device gain `7f`. Checked on the wheel with python-evdev effects through the virtual
+      wheel (`X360CHATPAD_WHEEL_SLOTS=0`). Still to do: try `fftest` and a game (SnowRunner),
+      and check which way games expect a positive force to turn the rim (it's one constant,
+      `CONSTANT_SIGN`; evdev direction `0x4000` currently pushes left).
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
-      period), the envelope fields, damper/inertia/friction, the ramp (`02`/`05`), several
-      effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
+      period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.
     - Find what `0c` frees (the memory still fills).
     - **Capture a real game instead (parked for now, brute force first).** On hand: an open
@@ -134,7 +141,9 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       the pins really carry USB. Fallback: a DashLaunch plugin on the RGH console that logs
       the controller/USB calls. Over the air is out: the RTL-SDR on hand doesn't reach
       2.4 GHz, and the link is proprietary and may be encrypted.
-    - Write the encoder (`ffb::Op` → packets) once forces are found.
+    - Periodic and ramp effects are accepted but not played. Once the periodic block is
+      mapped it goes in the encoder; the ramp (and periodic waves, if the block can't be
+      mapped) can be played by streaming constant-force updates.
   - **Fallback only**, if the search above comes up empty: a centring force from `0b 04`
     (motor on), `0b 02` (off) and `0b 40`–`7f` (strength), which games could scale. Not
     a substitute for the search.
