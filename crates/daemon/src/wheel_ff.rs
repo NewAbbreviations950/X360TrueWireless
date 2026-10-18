@@ -190,8 +190,12 @@ impl Encoder {
             self.rumble = rumble;
         }
 
-        // The wheel's autocentre stays on unless the game switches it off.
-        let native = self.autocenter.is_none_or(|s| s > 0.0);
+        // The wheel's autocentre stays on unless the game switches it off. SDL (so Steam,
+        // which keeps every joystick open) switches it off just by opening the wheel, so it
+        // only counts while the game has force effects uploaded (not rumble, which Steam
+        // keeps for itself); closing the game erases them.
+        let forces = (self.effects.values()).any(|s| !matches!(s.effect.kind, Kind::Rumble { .. }));
+        let native = !forces || self.autocenter.is_none_or(|s| s > 0.0);
         if self.native != Some(native) {
             out.push(device(if native { 0x20 } else { 0x10 }));
             self.native = Some(native);
@@ -504,14 +508,32 @@ mod tests {
     }
 
     #[test]
-    fn game_autocentre_off_keeps_the_wheel_limp() {
+    fn game_autocentre_off_keeps_the_wheel_limp_while_it_has_effects() {
         let mut e = Encoder::new();
         let t = Instant::now();
         let mut out = Vec::new();
+        // Opening the wheel switches the autocentre off, but it stays on with no effects.
         e.op(Op::Autocenter(0.0), t, &mut out);
-        assert_eq!(hex(&out), ["00 00 0b 7f", "00 00 0b 10"]);
+        assert_eq!(hex(&out), ["00 00 0b 7f", "00 00 0b 20"]);
+        out.clear();
+        e.op(
+            Op::Upload {
+                id: 0,
+                effect: constant(0.0, None),
+            },
+            t,
+            &mut out,
+        );
+        assert_eq!(hex(&out).last().unwrap(), "00 00 0b 10");
         out.clear();
         e.op(Op::Autocenter(0.5), t, &mut out);
         assert_eq!(hex(&out), ["00 00 0b 20"]);
+        out.clear();
+        e.op(Op::Autocenter(0.0), t, &mut out);
+        assert_eq!(hex(&out), ["00 00 0b 10"]);
+        out.clear();
+        // The game closes: its effects are erased and the wheel centres itself again.
+        e.op(Op::Erase { id: 0 }, t, &mut out);
+        assert_eq!(hex(&out).last().unwrap(), "00 00 0b 20");
     }
 }
