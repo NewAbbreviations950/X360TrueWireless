@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use nusb::transfer::{Buffer, In, Interrupt, Out, TransferError};
 use nusb::{DeviceInfo, Endpoint, MaybeFuture};
-use x360truewireless_proto::{Battery, ChatpadEvent, InPacket, out, parse};
+use x360truewireless_proto::{Battery, ChatpadEvent, Device, InPacket, out, parse};
 
 use devices::{ChatpadState, Pad, Wheel};
 use keyboard::Keyboard;
@@ -30,6 +30,9 @@ use layout::Layout;
 const RECEIVER_IDS: &[(u16, u16)] = &[(0x045e, 0x0719), (0x045e, 0x0291), (0x045e, 0x02a9)];
 const SLOTS: u8 = 4;
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(1);
+/// How long to wait for the device type after a connect before assuming a gamepad. The link
+/// info carrying it arrives within about 10 ms.
+const DEVICE_TYPE_TIMEOUT: Duration = Duration::from_secs(1);
 /// How often to re-read a connected controller's battery level.
 const BATTERY_REQUEST_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
@@ -39,9 +42,9 @@ enum Controller {
     Wheel(Wheel, wheel_ff::Encoder),
 }
 
-/// Slots whose controller should be exposed as a racing wheel, from the comma-separated
-/// `X360TRUEWIRELESS_WHEEL_SLOTS` (e.g. `0` or `0,2`). Until the link-info packet's device type
-/// is decoded, this is how a wheel is recognised.
+/// Slots whose controller should be exposed as a racing wheel whatever it reports, from the
+/// comma-separated `X360TRUEWIRELESS_WHEEL_SLOTS` (e.g. `0` or `0,2`). Wheels are recognised
+/// by their device type on connect, so this is only an override.
 fn wheel_slots() -> [bool; SLOTS as usize] {
     let mut slots = [false; SLOTS as usize];
     for s in std::env::var("X360TRUEWIRELESS_WHEEL_SLOTS")
@@ -237,10 +240,12 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     }
     send(&mut ep_out, &out::presence_inquiry())?;
 
-    let is_wheel = wheel_slots()[slot as usize];
+    let force_wheel = wheel_slots()[slot as usize];
     // Log games' force-feedback requests to a wheel (X360TRUEWIRELESS_FF_LOG=1).
     let ff_log = std::env::var_os("X360TRUEWIRELESS_FF_LOG").is_some();
     let mut controller: Option<Controller> = None;
+    // Connected, but the device type hasn't arrived yet: the deadline for it.
+    let mut pending: Option<Instant> = None;
     let mut chatpad = ChatpadState::default();
     let mut indicators = indicators::IndicatorSync::default();
     let mut keepalive_phase = false;
@@ -250,7 +255,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     let result = (|| -> Result<()> {
         while shared.running.load(Ordering::SeqCst) {
             // Poll faster while a controller is connected so rumble requests go out promptly.
-            let timeout = if controller.is_some() {
+            let timeout = if controller.is_some() || pending.is_some() {
                 Duration::from_millis(8)
             } else {
                 Duration::from_millis(100)
@@ -258,26 +263,29 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
             if let Some(c) = ep_in.wait_next_complete(timeout) {
                 match c.status {
                     Ok(()) => match parse(&c.buffer[..c.actual_len]) {
-                        InPacket::Presence { connected: true } if controller.is_none() => {
+                        InPacket::Presence { connected: true }
+                            if controller.is_none() && pending.is_none() =>
+                        {
                             eprintln!("slot {slot}: controller connected");
-                            controller = Some(if is_wheel {
-                                eprintln!("slot {slot}: exposing it as a racing wheel");
-                                Controller::Wheel(
-                                    Wheel::new().context("create virtual wheel")?,
-                                    wheel_ff::Encoder::new(),
-                                )
+                            if force_wheel {
+                                controller = Some(new_controller(slot, Device::Wheel)?);
                             } else {
-                                Controller::Pad(Pad::new().context("create virtual pad")?)
-                            });
+                                // The link info usually brings the type first; ask in case.
+                                pending = Some(Instant::now() + DEVICE_TYPE_TIMEOUT);
+                                send(&mut ep_out, &out::device_request())?;
+                            }
                             send(&mut ep_out, &out::led(2 + slot))?;
                             indicators.reset();
                             next_keepalive = Instant::now();
                             next_battery_request = Instant::now() + BATTERY_REQUEST_INTERVAL;
                             shared.set_connected(slot, true);
                         }
-                        InPacket::Presence { connected: false } if controller.is_some() => {
+                        InPacket::Presence { connected: false }
+                            if controller.is_some() || pending.is_some() =>
+                        {
                             eprintln!("slot {slot}: controller disconnected");
                             controller = None;
+                            pending = None;
                             shared.set_connected(slot, false);
                             let out = chatpad.release_all(&shared.keymap.read().unwrap());
                             shared.type_keys(&out.keys)?;
@@ -287,6 +295,19 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             Some(Controller::Wheel(wheel, _)) => wheel.emit(&state)?,
                             None => {}
                         },
+                        InPacket::LinkInfo { battery, device } => {
+                            if let Some(level) = battery {
+                                shared.set_battery(slot, level);
+                            }
+                            if let (Some(device), Some(_)) = (device, pending) {
+                                controller = Some(new_controller(slot, device)?);
+                                pending = None;
+                            }
+                        }
+                        InPacket::Device(device) if pending.is_some() => {
+                            controller = Some(new_controller(slot, device)?);
+                            pending = None;
+                        }
                         InPacket::Battery(level) => shared.set_battery(slot, level),
                         InPacket::Chatpad(ChatpadEvent::WakeRequest) => {
                             send(&mut ep_out, &out::chatpad_wake_ack())?
@@ -324,6 +345,12 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                 let mut buf = c.buffer;
                 buf.clear();
                 ep_in.submit(buf);
+            }
+
+            if pending.is_some_and(|deadline| Instant::now() >= deadline) {
+                eprintln!("slot {slot}: no device type reported; treating it as a gamepad");
+                controller = Some(new_controller(slot, Device::Gamepad)?);
+                pending = None;
             }
 
             match controller.as_mut() {
@@ -376,7 +403,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     })();
 
     let _ = shared.type_keys(&chatpad.release_all(&shared.keymap.read().unwrap()).keys);
-    if controller.is_some() {
+    if controller.is_some() || pending.is_some() {
         shared.set_connected(slot, false);
         let _ = send(&mut ep_out, &out::rumble(0, 0));
     }
@@ -389,6 +416,26 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     }
     ep_in.cancel_all();
     result
+}
+
+/// The virtual device for what connected: a racing wheel for a wheel, a pad for the rest.
+fn new_controller(slot: u8, device: Device) -> Result<Controller> {
+    Ok(match device {
+        Device::Wheel => {
+            eprintln!("slot {slot}: racing wheel");
+            Controller::Wheel(
+                Wheel::new().context("create virtual wheel")?,
+                wheel_ff::Encoder::new(),
+            )
+        }
+        Device::Gamepad => Controller::Pad(Pad::new().context("create virtual pad")?),
+        Device::Other(subtype) => {
+            eprintln!(
+                "slot {slot}: unknown device subtype {subtype:#04x}; treating it as a gamepad"
+            );
+            Controller::Pad(Pad::new().context("create virtual pad")?)
+        }
+    })
 }
 
 fn send(ep: &mut Endpoint<Interrupt, Out>, packet: &out::Packet) -> Result<()> {

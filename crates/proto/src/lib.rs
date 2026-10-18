@@ -10,10 +10,37 @@ pub enum InPacket {
     },
     Gamepad(GamepadState),
     Chatpad(ChatpadEvent),
-    /// The controller's battery level (from the link-info or status packet).
+    /// Sent on connect (and after a presence inquiry): the battery level and what kind of
+    /// device this is, when the packet carries them.
+    LinkInfo {
+        battery: Option<Battery>,
+        device: Option<Device>,
+    },
+    /// The controller's battery level (from the status packet).
     Battery(Battery),
+    /// Reply to [`out::device_request`].
+    Device(Device),
     /// Anything we don't understand (yet).
     Other,
+}
+
+/// What kind of device is on a slot, from register 5. Its low bits match XInput's subtypes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Device {
+    Gamepad,
+    Wheel,
+    /// Another subtype (register 5 & 0x7f); none has been seen yet.
+    Other(u8),
+}
+
+impl Device {
+    pub fn from_register(value: u8) -> Device {
+        match value & 0x7f {
+            0x01 => Device::Gamepad,
+            0x02 => Device::Wheel,
+            v => Device::Other(v),
+        }
+    }
 }
 
 /// Controller battery level. The codes are from `docs/protocol.md` (Battery).
@@ -171,11 +198,20 @@ pub fn parse(data: &[u8]) -> InPacket {
             })),
             _ => InPacket::Other,
         },
-        // Link info: byte 17 is the battery code; its low bits are `00011`, or `00111` from the
-        // racing wheel (bit 2 is ignored, see `docs/protocol.md`).
-        [0x00, 0x0f, 0x00, 0xf0, ..] if data.len() >= 18 && data[17] & 0x1b == 0x03 => {
-            battery(data[17])
-        }
+        // Link info: register/value pairs from byte 14. Byte 17 is the battery code (register
+        // 1); its low bits are `00011`, or `00111` from the racing wheel (bit 2 is ignored, see
+        // `docs/protocol.md`). Bytes 24–25 are register 5, the device type.
+        [0x00, 0x0f, 0x00, 0xf0, ..] if data.len() >= 18 => InPacket::LinkInfo {
+            battery: (data[17] & 0x1b == 0x03)
+                .then(|| Battery::from_code(data[17] >> 5))
+                .flatten(),
+            device: match data.get(24..26) {
+                Some(&[0x50, value]) => Some(Device::from_register(value)),
+                _ => None,
+            },
+        },
+        // Register 5 read: `00 00 00 50 XX`.
+        [0x00, 0x00, 0x00, 0x50, value, ..] => InPacket::Device(Device::from_register(*value)),
         // Status: byte 4 is the battery code; its low bits are `00010`, or `00110` from the wheel.
         [0x00, 0x00, 0x00, 0x13 | 0x17, b, ..] if b & 0x1b == 0x02 => battery(*b),
         _ => InPacket::Other,
@@ -211,6 +247,12 @@ pub mod out {
     /// Read the battery register; answered with a status packet (`00 00 00 13 XX`).
     pub const fn battery_request() -> Packet {
         packet(0x00, 0x00, 0x00, 0x40)
+    }
+
+    /// Read register 5, the device type; answered with `00 00 00 50 XX`
+    /// ([`super::InPacket::Device`]).
+    pub const fn device_request() -> Packet {
+        packet(0x00, 0x00, 0x01, 0x40)
     }
 
     pub const fn power_off() -> Packet {
@@ -419,6 +461,42 @@ mod tests {
         ))
     }
 
+    fn linked(battery: Option<Battery>) -> InPacket {
+        InPacket::LinkInfo {
+            battery,
+            device: None,
+        }
+    }
+
+    #[test]
+    fn device_type() {
+        // From captures/wheel-probe-2026-10-18.log and docs/captures/chatpad-keys.log.
+        let wheel = hex(
+            "00 0f 00 f0 f0 cc e1 47 40 70 fb d8 76 10 00 03 13 e7 20 1d 30 03 40 01 50 82 ff ff ff",
+        );
+        let pad = hex(
+            "00 0f 00 f0 00 cc e1 47 40 70 ef 87 54 30 00 20 13 e3 20 1d 30 03 40 01 50 01 ff ff ff",
+        );
+        assert_eq!(
+            parse(&wheel),
+            InPacket::LinkInfo {
+                battery: Some(Battery::Full),
+                device: Some(Device::Wheel)
+            }
+        );
+        assert_eq!(
+            parse(&pad),
+            InPacket::LinkInfo {
+                battery: Some(Battery::Full),
+                device: Some(Device::Gamepad)
+            }
+        );
+        assert_eq!(
+            parse(&hex("00 00 00 50 82 00 00")),
+            InPacket::Device(Device::Wheel)
+        );
+    }
+
     fn status(byte4: &str) -> Vec<u8> {
         hex(&format!("00 00 00 13 {byte4} 00 00 00"))
     }
@@ -426,10 +504,10 @@ mod tests {
     // Battery bytes are from docs/captures/battery-sweep-2026-10-10.log.
     #[test]
     fn battery_codes() {
-        assert_eq!(parse(&link("e3")), InPacket::Battery(Battery::Full));
-        assert_eq!(parse(&link("a3")), InPacket::Battery(Battery::Medium));
-        assert_eq!(parse(&link("63")), InPacket::Battery(Battery::Low));
-        assert_eq!(parse(&link("23")), InPacket::Battery(Battery::Empty));
+        assert_eq!(parse(&link("e3")), linked(Some(Battery::Full)));
+        assert_eq!(parse(&link("a3")), linked(Some(Battery::Medium)));
+        assert_eq!(parse(&link("63")), linked(Some(Battery::Low)));
+        assert_eq!(parse(&link("23")), linked(Some(Battery::Empty)));
 
         assert_eq!(parse(&status("e2")), InPacket::Battery(Battery::Full));
         assert_eq!(parse(&status("a2")), InPacket::Battery(Battery::Medium));
@@ -441,15 +519,15 @@ mod tests {
             InPacket::Battery(Battery::Low)
         );
         // The racing wheel sets bit 2, on AC or batteries (captures/wheel-probe-2026-10-14.log).
-        assert_eq!(parse(&link("e7")), InPacket::Battery(Battery::Full));
+        assert_eq!(parse(&link("e7")), linked(Some(Battery::Full)));
         assert_eq!(parse(&status("e6")), InPacket::Battery(Battery::Full));
     }
 
     #[test]
     fn battery_rejects_unknown_bytes() {
         // Low five bits don't match the packet type (the unexplained `c0` and `3c` values).
-        assert_eq!(parse(&link("c0")), InPacket::Other);
-        assert_eq!(parse(&link("3c")), InPacket::Other);
+        assert_eq!(parse(&link("c0")), linked(None));
+        assert_eq!(parse(&link("3c")), linked(None));
         assert_eq!(parse(&status("c0")), InPacket::Other);
         assert_eq!(parse(&status("3c")), InPacket::Other);
         // Right low bits, but code 0 isn't a known level.

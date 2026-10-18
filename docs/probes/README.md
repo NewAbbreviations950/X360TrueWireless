@@ -95,9 +95,9 @@ This part doesn't need the protocol. The daemon can expose a slot as a virtual r
 that accepts every force-feedback effect type and logs what games send:
 ```sh
 systemctl --user stop x360truewireless.service
-X360TRUEWIRELESS_WHEEL_SLOTS=0 X360TRUEWIRELESS_FF_LOG=1 ~/.local/bin/x360truewireless-daemon
+X360TRUEWIRELESS_FF_LOG=1 ~/.local/bin/x360truewireless-daemon
 ```
-(Use the wheel's slot; reinstall with `./install.sh --local` first so the binary is current.)
+(Reinstall with `./install.sh --local` first so the binary is current. The wheel is detected on connect.)
 - `evtest` should list "Microsoft Xbox 360 Wireless Racing Wheel" with steering on `ABS_X`,
   throttle on `ABS_Z` and brake on `ABS_RZ`.
 - `fftest /dev/input/eventN` should log one `ff Upload …` / `Play` / `Stop` per effect.

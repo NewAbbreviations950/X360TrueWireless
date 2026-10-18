@@ -70,13 +70,9 @@ constant force, spring, damper, inertia and friction effects, and rumble. Period
 effects are accepted but don't play yet. Keep the wheel on its AC adapter: force feedback
 needs it.
 
-The wheel isn't detected automatically yet. Tell the driver which slot it's on (the quarter
-lit on its ring of light, counting from 0):
-
-```sh
-systemctl --user edit x360truewireless   # add: [Service] Environment=X360TRUEWIRELESS_WHEEL_SLOTS=0
-systemctl --user restart x360truewireless
-```
+Wheels are recognised when they connect, so there's nothing to set up, and any mix of up to
+four wheels and controllers works. Each wheel shows up as its own "Microsoft Xbox 360
+Wireless Racing Wheel" joystick.
 
 ## Configuration
 

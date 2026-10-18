@@ -124,7 +124,9 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       inertia, friction and rumble; the daemon times delays, durations and repeats itself,
       coalesces updates into parameter blocks, applies the game's gain to the effects and sets
       device gain `7f`. Checked on the wheel with python-evdev effects through the virtual
-      wheel (`X360TRUEWIRELESS_WHEEL_SLOTS=0`). Still to do: try `fftest` and a game (SnowRunner),
+      wheel. Wheels are detected on connect from the device type (register 5, carried in the
+      link info; up to four at once, one per slot), with `X360TRUEWIRELESS_WHEEL_SLOTS` as a
+      manual override. Still to do: try `fftest` and a game (SnowRunner),
       and check which way games expect a positive force to turn the rim (it's one constant,
       `CONSTANT_SIGN`; evdev direction `0x4000` currently pushes left).
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
