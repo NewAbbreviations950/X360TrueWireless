@@ -39,8 +39,11 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 
 
 ## Next
-- **Publish:** create the GitHub repo `NewAbbreviations950/X360TrueWireless`, push, and tag
-  `v0.1.0` so the one-line installer works.
+- **Publish the rename:** the repo is `NewAbbreviations950/X360ChatDriver` (releases up to
+  v0.1.1, under the old names). Rename it to `X360TrueWireless` (GitHub redirects the old
+  links), then push `dev`, merge into `main` and tag v0.2.0 together: the new installer
+  downloads `x360truewireless-x86_64-linux.tar.gz` from the latest release, which v0.1.1
+  doesn't have. Then update the Steam Deck with the README's curl command.
 - **Test on Steam Deck** (desktop + game mode) and **Kubuntu**:
   - Steam sees exactly one pad per controller.
   - Chatpad types in game mode.
