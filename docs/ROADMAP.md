@@ -185,6 +185,16 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       then the menus and forces in SnowRunner, with `X360TRUEWIRELESS_FF_LOG`. If the game
       skips the wheel as a gamepad, try joystick. Also check the Xbox controller mode with
       Steam Input on, and switching with the wheel connected.
+    - **rc3 result:** sim wheel (gamepad layout) worked for buttons and steering but SnowRunner
+      showed no wheel and no forces; the joystick layout wasn't listed either. Cause, from
+      Proton's source (`winebus.sys/bus_sdl.c`, `dinput/joystick_hid.c`): Proton presents a
+      device as a DirectInput driving device (with all PID effects) only when SDL's joystick
+      type is wheel, and SDL decides that from a fixed VID/PID list
+      (`SDL_JOYSTICK_WHEEL_DEVICES` adds more). Otherwise it's a gamepad (an SDL-mapped
+      device, also XInput) or a plain joystick. rc4: the sim wheel uses `1209:ffb0`
+      (OpenFFBoard, in SDL's list since 2.30), and the joystick mode is gone (`joystick`
+      still parses, as sim wheel). To test: whether SnowRunner lists the wheel, binds its
+      buttons and plays forces.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.

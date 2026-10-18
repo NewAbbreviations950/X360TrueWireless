@@ -531,20 +531,14 @@ impl Settings {
                 (
                     WheelMode::Wheel,
                     "Sim wheel",
-                    "A wheel with force feedback, for games with wheel support. \
-                     Turn Steam Input off for generic controllers so games see it.",
+                    "A wheel with force feedback, for games with wheel support. Turn Steam \
+                     Input off for generic controllers so games see the wheel itself.",
                 ),
                 (
                     WheelMode::Controller,
                     "Xbox controller",
                     "An Xbox 360 controller, for games without wheel support: steering on the \
                      left stick, with rumble and the wheel's own centring.",
-                ),
-                (
-                    WheelMode::Joystick,
-                    "Joystick",
-                    "A sim wheel without gamepad buttons, for games that ignore the wheel \
-                     because it looks like a gamepad.",
                 ),
             ] {
                 let selected = current == mode;

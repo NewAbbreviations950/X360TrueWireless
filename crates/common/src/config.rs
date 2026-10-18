@@ -11,7 +11,7 @@
 //! [keys.green]
 //! E = "KEY_F5"
 //!
-//! # How a racing wheel shows up: "wheel" (default), "controller" or "joystick".
+//! # How a racing wheel shows up: "wheel" (default) or "controller".
 //! wheel_mode = "controller"
 //! ```
 
@@ -38,16 +38,14 @@ pub struct Config {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WheelMode {
-    /// A sim wheel with force feedback. It has gamepad buttons and trigger axes, so SDL,
-    /// Steam and Proton also treat it as a gamepad and game menus work with it.
+    /// A sim wheel with force feedback, for games with wheel support. (`joystick` was a
+    /// variant of it in pre-releases.)
     #[default]
+    #[serde(alias = "joystick")]
     Wheel,
     /// An Xbox 360 pad, for games without wheel support: steering on the left stick, rumble,
     /// and the wheel's own autocentre.
     Controller,
-    /// A sim wheel that's a plain joystick, for games that skip gamepads when they look for
-    /// a wheel.
-    Joystick,
 }
 
 impl Config {
@@ -113,6 +111,8 @@ mod tests {
     fn wheel_mode() {
         let config: Config = toml::from_str("wheel_mode = \"controller\"").unwrap();
         assert_eq!(config.wheel_mode, Some(WheelMode::Controller));
+        let config: Config = toml::from_str("wheel_mode = \"joystick\"").unwrap();
+        assert_eq!(config.wheel_mode, Some(WheelMode::Wheel));
         assert!(toml::from_str::<Config>("wheel_mode = \"gamepad\"").is_err());
     }
 

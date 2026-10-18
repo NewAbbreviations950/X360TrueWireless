@@ -85,8 +85,6 @@ right away, so switch before starting a game:
   settings. Your Xbox controllers stay on Steam Input.
 - **Xbox controller**: an ordinary Xbox 360 controller, for games without wheel support.
   Steering is the left stick, and you get rumble and the wheel's own centring.
-- **Joystick**: a sim wheel without gamepad buttons, for games that ignore the wheel because
-  it looks like a gamepad.
 
 ## Configuration
 
@@ -107,7 +105,7 @@ E = "KEY_F5"
 ```
 
 `wheel_mode` (a top-level setting, above any `[keys…]` section) is the popup's Racing wheel
-choice: `"wheel"` (default), `"controller"` or `"joystick"`.
+choice: `"wheel"` (default) or `"controller"`.
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
 the tray menu, or run `systemctl --user restart x360truewireless`.
