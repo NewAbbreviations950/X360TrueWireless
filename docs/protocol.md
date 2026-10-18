@@ -349,6 +349,20 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   lock in about 1.2 s. Periodic waves (`07` + `03`) with the autocentre off swing the rim
   lock to lock, and some springs (`04`) moved it as well. Earlier tests never moved it
   because the effects had no envelope block, or were started with `09`.
+- Constant-force details (traced with the autocentre on, so the spring brings the rim back
+  when the force ends):
+  - **Duration** (create byte 4) is in about 10 ms units: `32` pushed for about 0.6 s, `64`
+    about 1.5 s, `ff` about 2.7 s; `0a` was a short tap, `01` too short to see. **`00` plays
+    until stopped.**
+  - **Gain** (create byte 5) scales the force: with `7f` force, gain `20` barely moved the rim,
+    `7f` gave the full push.
+  - **Live update:** sending a new constant block (`08 01 MM …`) while the effect plays
+    changes the force at once, with no new start. `08 01 00 …` brings it to zero.
+  - **Stop:** `0b 04 00 01` (action 1 on the first slot), device control `00 00 0b 03` (stop
+    all effects) and `0c 01` (free) all stop it. `0b 0c 00 01` (action 3) restarts it, and
+    `0b 01 00 01` and `09 01` don't stop it.
+  - With the autocentre off and the weight on, the rim stays at whichever lock it reaches, so
+    stop tests need the autocentre on.
 - Autocentre off (`0b 10`), then the effects started (spring/damper/inertia/friction with
   condition blocks, the five periodic waves, constant force; starts `0b 08`, `0b 0c`, `09`, and
   `0b 08` + `0b 06` + `0b 01`): none pulled the rim off its stop. The device controls after
