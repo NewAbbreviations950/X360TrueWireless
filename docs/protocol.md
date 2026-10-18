@@ -333,6 +333,22 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   needs an envelope block. All the constant-force movement tests with `0b 08` before this had
   no envelope. Nothing moved with the complete effects in this first check either (host
   springs with the autocentre on, constant/periodic with envelopes).
+- **Force found (2026-10-18, 06:40).** A complete effect started with `0b 08 00 01` drives
+  the motor:
+  ```
+  00 01 0f c0 02 01 05 01 ff ff 00 01   create constant force at index 1
+  00 01 0f c0 08 01 MM 00 00 00 00 00   constant parameters: MM = signed force
+  00 01 0f c0 03 01 00 00 00 00 00 00   envelope (required, all zero works)
+  00 01 0f c0 0b 08 00 01 00 00 00 00   start index 1
+  ```
+  `MM` is a signed 8-bit force: positive turns the rim right (steering +), negative left.
+  With the autocentre off and the weight on, `10` nudged it, `20` swept it slowly to the right
+  lock, `40`–`7f` snapped it there in about a second; `c0`–`f0` drove it to the left lock,
+  `01` and `ff` did nothing visible. Bytes 3–7 of the constant block don't move it by
+  themselves. With the autocentre on, `80` still drives it from its rest point to the left
+  lock in about 1.2 s. Periodic waves (`07` + `03`) with the autocentre off swing the rim
+  lock to lock, and some springs (`04`) moved it as well. Earlier tests never moved it
+  because the effects had no envelope block, or were started with `09`.
 - Autocentre off (`0b 10`), then the effects started (spring/damper/inertia/friction with
   condition blocks, the five periodic waves, constant force; starts `0b 08`, `0b 0c`, `09`, and
   `0b 08` + `0b 06` + `0b 01`): none pulled the rim off its stop. The device controls after
