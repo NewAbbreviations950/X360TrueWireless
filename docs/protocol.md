@@ -323,6 +323,23 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   action byte `0b AA 00 01 00 00 00 00` and `0b AA 00 01 01 01 00 00` after the load. The
   replies matched the slot map above: `c1` when the first slot's action is 2 or 3, `c2`/`c4`
   for the second and third slots, combined (`c3`…`c7`) when several index bytes are `01`.
+- **The start reply shows whether the effect is complete** (2026-10-18 morning). After
+  `0b 08 00 01`, the reply is `c1` for an index with nothing loaded, a create alone, or a
+  constant/periodic effect with only its own parameter block. It's `80` (slot bit and bit
+  `40` clear) for a condition effect with a condition block (any contents, all 72 single-byte
+  variants tried), and for a constant or periodic effect with **both** its parameter block and
+  an envelope (`03`). With a constant at index 1 and a spring at 2, `0b 28 00 01 02` replies
+  `81`. So the slot bits look like per-slot errors ("not ready"), and the constant force
+  needs an envelope block. All the constant-force movement tests with `0b 08` before this had
+  no envelope. Nothing moved with the complete effects in this first check either (host
+  springs with the autocentre on, constant/periodic with envelopes).
+- Autocentre off (`0b 10`), then the effects started (spring/damper/inertia/friction with
+  condition blocks, the five periodic waves, constant force; starts `0b 08`, `0b 0c`, `09`, and
+  `0b 08` + `0b 06` + `0b 01`): none pulled the rim off its stop. The device controls after
+  a start didn't either; `0b 14`/`1c` moved it, but they do that alone too. Device control 4
+  (reset) turns the autocentre back on even with bit `10` set (register 8 goes back to `f1`).
+  Register 8 bit `40` clears while the autocentre is off (`e1` → `a1`), so it is the native
+  effect's state, as the patent reading suggested.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
