@@ -372,6 +372,10 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   back to centre (`00 00 7f 00 7f 00`, or all of PC…NS at `7f`), while PC/PS alone or any single
   byte did nothing. All six bytes at `7f` pulled the rim past centre to the right, so byte 2
   is the centre-point offset. The spring needs only the create and this block, then the start.
+- **Second effect:** a constant force created at index 2 plays when started either as
+  `0b 08 00 02` (first slot byte holding index 2) or `0b 20 00 00 02` (second slot byte).
+- **Envelope** (`03 ii …`): setting any one byte to `7f` with a `c0` force didn't visibly
+  change the push (onset 0.2–0.8 s either way, like the all-zero envelope). Not mapped yet.
 - **Periodic** (`07 ii …` + envelope): not mapped yet. Byte 2 alone does nothing; with byte 6
   or 7 also set the rim gets pushed, but with the weight rig only the leftward half shows
   (autocentre on) or the timing is irregular (off). Mapping magnitude/offset/phase/period is
