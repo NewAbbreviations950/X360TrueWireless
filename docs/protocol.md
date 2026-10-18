@@ -304,8 +304,15 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   already known: `0b 02` disables the motor and `0b 04` (reset, which "enables all motors")
   turns it on. So the low 3 bits are the standard control, bits 3–5 hold the native control
   (`10` stops the autocentre, `20` starts it), and bit `20` of the `0b` reply is "play list
-  paused". The reply never showed a start succeeding (`df` whenever `AA & 3` ≠ 0); the
-  other reply bits are still to be decoded.
+  paused".
+- **`kk` = `0b` structure** (reply map with an effect loaded at index 1, 2026-10-18):
+  `0b AA xx I1 I2 I3 xx xx`. `AA` holds 2-bit actions: bits 2–3 act on the index in byte 3,
+  bits 4–5 on byte 4, bits 6–7 on byte 5, and reply bits `01`/`02`/`04` report on each in
+  turn. Bits 0–1 of `AA` always draw `df` (an error, or a different operation), and bytes
+  2, 6 and 7 never change the reply. With index `01`, action 2 (`08`/`20`/`80`) sets that
+  slot's reply bit and action 1 doesn't (`0c` also does for the first slot), so 2 is
+  probably "start" and the bit "playing". Starting index 1 this way (any byte 2, constant
+  block `7f`/`80` ×6) still didn't move the rim.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
