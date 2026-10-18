@@ -10,8 +10,8 @@ fit a header of a 4-bit class plus an 8-bit command (`08 4x` LED, `08 c0` power 
 ## Running a probe
 Stop the service, start the dump tool, and keep a log:
 ```sh
-systemctl --user stop x360chatpad.service
-cargo run --bin x360chatpad-dump | tee captures/wheel-probe-$(date +%F).log
+systemctl --user stop x360truewireless.service
+cargo run --bin x360truewireless-dump | tee captures/wheel-probe-$(date +%F).log
 ```
 Then type commands (slot = the wheel's slot, 0–3; the ring light shows it):
 ```
@@ -58,9 +58,9 @@ force-feedback channel: the wheel acknowledges and stores effect and parameter b
 The `p` probe pauses on every reset, and its blame can lag a step, so the 2026-10-16 session
 drove the dump tool from shell scripts instead. Start the tool reading a FIFO:
 ```sh
-systemctl --user stop x360chatpad.service
+systemctl --user stop x360truewireless.service
 mkfifo /tmp/wheel.fifo; sleep infinity > /tmp/wheel.fifo &
-./target/debug/x360chatpad-dump < /tmp/wheel.fifo | tee captures/wheel-probe-$(date +%F).log
+./target/debug/x360truewireless-dump < /tmp/wheel.fifo | tee captures/wheel-probe-$(date +%F).log
 ```
 Then, with `LOG` (the log), `FIFO` and `SLOT` set:
 - `scripts/oracle.sh <file>` sends one packet per line and prints those that draw a reply.
@@ -94,8 +94,8 @@ plan, and the next step is rethinking the approach rather than more guessing.
 This part doesn't need the protocol. The daemon can expose a slot as a virtual racing wheel
 that accepts every force-feedback effect type and logs what games send:
 ```sh
-systemctl --user stop x360chatpad.service
-X360CHATPAD_WHEEL_SLOTS=0 X360CHATPAD_FF_LOG=1 ~/.local/bin/x360chatpad-daemon
+systemctl --user stop x360truewireless.service
+X360TRUEWIRELESS_WHEEL_SLOTS=0 X360TRUEWIRELESS_FF_LOG=1 ~/.local/bin/x360truewireless-daemon
 ```
 (Use the wheel's slot; reinstall with `./install.sh --local` first so the binary is current.)
 - `evtest` should list "Microsoft Xbox 360 Wireless Racing Wheel" with steering on `ABS_X`,

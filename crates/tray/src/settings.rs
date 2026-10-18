@@ -8,9 +8,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Vec2};
-use x360chatpad_common::config::Config;
-use x360chatpad_common::keymap::{KeyTable, Layer, Output};
-use x360chatpad_common::{Battery, ChatpadKey};
+use x360truewireless_common::config::Config;
+use x360truewireless_common::keymap::{KeyTable, Layer, Output};
+use x360truewireless_common::{Battery, ChatpadKey};
 
 use crate::client::{self, Client, Status};
 use crate::placement::{self, Anchor};
@@ -68,12 +68,12 @@ const SPECIAL_KEYS: &[(&str, &str)] = &[
     ("Mute", "KEY_MUTE"),
 ];
 
-const APP_ID: &str = "x360chatpad";
+const APP_ID: &str = "x360truewireless";
 
 pub fn run(anchor: Option<Anchor>) -> anyhow::Result<()> {
     let size = [10.0 * KEY.x + 9.0 * GAP + 2.0 * 20.0, 540.0];
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("X360 Chatpad")
+        .with_title("X360TrueWireless")
         .with_app_id(APP_ID)
         .with_decorations(false)
         .with_transparent(true)
@@ -91,7 +91,7 @@ pub fn run(anchor: Option<Anchor>) -> anyhow::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "X360 Chatpad",
+        "X360TrueWireless",
         options,
         Box::new(|cc| Ok(Box::new(Settings::new(&cc.egui_ctx)))),
     )
@@ -214,7 +214,7 @@ impl Settings {
         let p = self.palette.clone();
         let status = self.status.lock().unwrap().clone();
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("X360 Chatpad").size(18.0).strong());
+            ui.label(egui::RichText::new("X360TrueWireless").size(18.0).strong());
             ui.add_space(8.0);
             let (dot, text) = match &status.running {
                 None => (p.warn, "Driver not running".to_owned()),

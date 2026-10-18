@@ -16,7 +16,7 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 - People opens Steam friends & chat (`steam://open/friends`).
 - Quick Access sends Guide, then A 80 ms later, so Steam doesn't also register a stray A.
 - Caps light synced with the system Caps Lock via an `LED_CAPSL` on the virtual keyboard.
-- Tray app and settings popup (`x360chatpad-tray`):
+- Tray app and settings popup (`x360truewireless-tray`):
   - **Tray icon:** a StatusNotifierItem via `ksni`, sent as pixels rendered from our SVG
     in the panel's text colour. It shows status, connected players and the layout.
   - **Settings popup:** a borderless `egui` window (`--settings`) that closes when it loses
@@ -26,7 +26,7 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
     is the system UI font.
   - **Keymap editor:** keycaps show all three layers. Keys are selected by clicking or by
     pressing them on the chatpad, and changes save and apply instantly over D-Bus.
-- **Daemon D-Bus service** `io.github.NewAbbreviations950.X360Chatpad`: `Reload`, `Status`,
+- **Daemon D-Bus service** `io.github.NewAbbreviations950.X360TrueWireless`: `Reload`, `Status`,
   and a `ChatpadKey` signal. `crates/common` holds the shared config and keymap.
 - **Key remapping** in `config.toml` under `[keys.normal|green|orange]`.
 - **Layout changes at runtime:** "Reload" in the tray, or saving in the popup, re-detects
@@ -39,7 +39,7 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 
 
 ## Next
-- **Publish:** create the GitHub repo `NewAbbreviations950/X360ChatDriver`, push, and tag
+- **Publish:** create the GitHub repo `NewAbbreviations950/X360TrueWireless`, push, and tag
   `v0.1.0` so the one-line installer works.
 - **Test on Steam Deck** (desktop + game mode) and **Kubuntu**:
   - Steam sees exactly one pad per controller.
@@ -81,10 +81,10 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 - **Power off controller** from the tray or popup (`00 00 08 c0`); needs a D-Bus method.
 - **Racing wheel force feedback** (Xbox 360 Wireless Racing Wheel, WRW01). Games' effects
   are passed to the wheel through the receiver.
-  - Done: a `p` probe command in `x360chatpad-dump` with sweep scripts (`docs/probes/`).
+  - Done: a `p` probe command in `x360truewireless-dump` with sweep scripts (`docs/probes/`).
     The daemon can expose a slot as a joystick-style virtual wheel
-    (`X360CHATPAD_WHEEL_SLOTS`) that accepts every evdev effect type and logs it
-    (`X360CHATPAD_FF_LOG`). Effects are normalised in `crates/daemon/src/ffb.rs`.
+    (`X360TRUEWIRELESS_WHEEL_SLOTS`) that accepts every evdev effect type and logs it
+    (`X360TRUEWIRELESS_FF_LOG`). Effects are normalised in `crates/daemon/src/ffb.rs`.
   - Found (2026-10-14, details in `docs/protocol.md`): link info identifies the wheel
     (register 5 = `82`); classes 0–2 are register reads; `00 00 0b xx` switches the motor
     on/off (`02`/`04`) and sets a spring strength (`40`–`5f`, also `60`–`7f`); rumble
@@ -124,7 +124,7 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       inertia, friction and rumble; the daemon times delays, durations and repeats itself,
       coalesces updates into parameter blocks, applies the game's gain to the effects and sets
       device gain `7f`. Checked on the wheel with python-evdev effects through the virtual
-      wheel (`X360CHATPAD_WHEEL_SLOTS=0`). Still to do: try `fftest` and a game (SnowRunner),
+      wheel (`X360TRUEWIRELESS_WHEEL_SLOTS=0`). Still to do: try `fftest` and a game (SnowRunner),
       and check which way games expect a positive force to turn the rim (it's one constant,
       `CONSTANT_SIGN`; evdev direction `0x4000` currently pushes left).
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/

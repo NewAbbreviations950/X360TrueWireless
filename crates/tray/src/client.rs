@@ -1,11 +1,11 @@
-//! Talking to x360chatpad-daemon over the session bus.
+//! Talking to x360truewireless-daemon over the session bus.
 
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use x360chatpad_common::dbus::{BUS_NAME, INTERFACE, OBJECT_PATH};
-use x360chatpad_common::{Battery, ChatpadKey};
+use x360truewireless_common::dbus::{BUS_NAME, INTERFACE, OBJECT_PATH};
+use x360truewireless_common::{Battery, ChatpadKey};
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Status {

@@ -2,7 +2,7 @@
 Description=Xbox 360 wireless controller + chatpad driver
 
 [Service]
-ExecStart=%h/.local/bin/x360chatpad-daemon
+ExecStart=%h/.local/bin/x360truewireless-daemon
 Restart=on-failure
 RestartSec=2
 

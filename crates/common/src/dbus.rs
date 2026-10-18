@@ -7,6 +7,6 @@
 //! unknown or not connected.
 //! Signal: `ChatpadKey(slot: y, key: s)` when a chatpad key is pressed (`ChatpadKey` name).
 
-pub const BUS_NAME: &str = "io.github.NewAbbreviations950.X360Chatpad";
-pub const OBJECT_PATH: &str = "/io/github/NewAbbreviations950/X360Chatpad";
-pub const INTERFACE: &str = "io.github.NewAbbreviations950.X360Chatpad1";
+pub const BUS_NAME: &str = "io.github.NewAbbreviations950.X360TrueWireless";
+pub const OBJECT_PATH: &str = "/io/github/NewAbbreviations950/X360TrueWireless";
+pub const INTERFACE: &str = "io.github.NewAbbreviations950.X360TrueWireless1";

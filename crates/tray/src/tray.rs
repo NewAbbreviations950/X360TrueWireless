@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use ksni::blocking::TrayMethods;
 use ksni::menu::{MenuItem, StandardItem};
-use x360chatpad_common::Battery;
+use x360truewireless_common::Battery;
 
 use crate::client::{Client, Status};
 
@@ -49,11 +49,11 @@ impl Tray {
 
 impl ksni::Tray for Tray {
     fn id(&self) -> String {
-        "x360chatpad".into()
+        "x360truewireless".into()
     }
 
     fn title(&self) -> String {
-        "X360 Chatpad".into()
+        "X360TrueWireless".into()
     }
 
     fn icon_name(&self) -> String {
@@ -75,7 +75,7 @@ impl ksni::Tray for Tray {
 
     fn tool_tip(&self) -> ksni::ToolTip {
         ksni::ToolTip {
-            title: "X360 Chatpad".into(),
+            title: "X360TrueWireless".into(),
             description: self.tool_tip_text(),
             ..Default::default()
         }
@@ -175,7 +175,7 @@ pub fn open_settings(at: Option<(i32, i32)>) {
     {
         return;
     }
-    let exe = std::env::current_exe().unwrap_or_else(|_| "x360chatpad-tray".into());
+    let exe = std::env::current_exe().unwrap_or_else(|_| "x360truewireless-tray".into());
     let mut command = Command::new(exe);
     command.arg("--settings");
     if let Some((x, y)) = at {
@@ -225,7 +225,7 @@ fn notify_low_battery(slot: usize) {
         Some("org.freedesktop.Notifications"),
         "Notify",
         &(
-            "X360 Chatpad",
+            "X360TrueWireless",
             0u32,
             "input-gaming",
             format!("Player {} battery is low", slot + 1),
@@ -239,7 +239,7 @@ fn notify_low_battery(slot: usize) {
 
 pub fn restart_driver() {
     let _ = Command::new("systemctl")
-        .args(["--user", "restart", "x360chatpad.service"])
+        .args(["--user", "restart", "x360truewireless.service"])
         .status();
 }
 

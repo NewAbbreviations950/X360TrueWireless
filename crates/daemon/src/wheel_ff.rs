@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use x360chatpad_proto::out::Packet;
+use x360truewireless_proto::out::Packet;
 
 use crate::ffb::{Condition, Effect, Kind, Op};
 

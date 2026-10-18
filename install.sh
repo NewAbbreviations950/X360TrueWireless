@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Install, update or remove x360chatpad for the current user.
+# Install, update or remove x360truewireless for the current user.
 #
-#   curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360ChatDriver/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireless/main/install.sh | bash
 #   ... | bash -s -- --uninstall
 #   ./install.sh --local        # from a checkout: build and install the working tree
 #
@@ -9,16 +9,16 @@
 # your user access the Xbox 360 wireless receiver.
 set -euo pipefail
 
-REPO="${X360CHATPAD_REPO:-NewAbbreviations950/X360ChatDriver}"
-ASSET="x360chatpad-x86_64-linux.tar.gz"
+REPO="${X360TRUEWIRELESS_REPO:-NewAbbreviations950/X360TrueWireless}"
+ASSET="x360truewireless-x86_64-linux.tar.gz"
 
 BIN_DIR="$HOME/.local/bin"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-UNIT="x360chatpad.service"
+UNIT="x360truewireless.service"
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
 ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
-RULE_DEST="/etc/udev/rules.d/70-x360chatpad.rules"
+RULE_DEST="/etc/udev/rules.d/70-x360truewireless.rules"
 
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
@@ -46,13 +46,14 @@ reload_udev() {
 
 install_files() {
     local src="$1"   # directory containing bin/ and share/
+    migrate_old_install
     say "Installing binaries to $BIN_DIR"
-    install -Dm755 "$src/bin/x360chatpad-daemon" "$BIN_DIR/x360chatpad-daemon"
-    install -Dm755 "$src/bin/x360chatpad-tray" "$BIN_DIR/x360chatpad-tray"
+    install -Dm755 "$src/bin/x360truewireless-daemon" "$BIN_DIR/x360truewireless-daemon"
+    install -Dm755 "$src/bin/x360truewireless-tray" "$BIN_DIR/x360truewireless-tray"
 
-    say "Adding \"X360 Chatpad Settings\" to the app menu and the tray icon to autostart"
-    install_desktop "$src/share/x360chatpad-settings.desktop" "$APPS_DIR/x360chatpad-settings.desktop"
-    install_desktop "$src/share/x360chatpad-tray.desktop" "$AUTOSTART_DIR/x360chatpad-tray.desktop"
+    say "Adding \"X360TrueWireless Settings\" to the app menu and the tray icon to autostart"
+    install_desktop "$src/share/x360truewireless-settings.desktop" "$APPS_DIR/x360truewireless-settings.desktop"
+    install_desktop "$src/share/x360truewireless-tray.desktop" "$AUTOSTART_DIR/x360truewireless-tray.desktop"
     for icon in "$src"/share/icons/*.svg; do
         install -Dm644 "$icon" "$ICON_DIR/$(basename "$icon")"
     done
@@ -62,11 +63,11 @@ install_files() {
     install -Dm644 "$src/share/$UNIT" "$UNIT_DIR/$UNIT"
     systemctl --user daemon-reload
 
-    if [ -f "$RULE_DEST" ] && cmp -s "$src/share/70-x360chatpad.rules" "$RULE_DEST"; then
+    if [ -f "$RULE_DEST" ] && cmp -s "$src/share/70-x360truewireless.rules" "$RULE_DEST"; then
         say "udev rule already up to date"
     else
         say "Installing udev rule to $RULE_DEST"
-        as_root install -Dm644 "$src/share/70-x360chatpad.rules" "$RULE_DEST"
+        as_root install -Dm644 "$src/share/70-x360truewireless.rules" "$RULE_DEST"
         reload_udev
     fi
 
@@ -74,8 +75,38 @@ install_files() {
     # restart (not start) so updates take effect immediately.
     systemctl --user restart "$UNIT"
     start_tray
-    say "Done. x360chatpad is running and will start automatically when you log in."
+    say "Done. x360truewireless is running and will start automatically when you log in."
     say "Logs: journalctl --user -u $UNIT -f"
+}
+
+# The project used to be called x360chatpad. Remove that install (service, binaries, menu
+# entries, icons, udev rule) and move its settings, so updating from it needs no manual steps.
+migrate_old_install() {
+    local old_unit="$UNIT_DIR/x360chatpad.service" old_rule="/etc/udev/rules.d/70-x360chatpad.rules"
+    local old_config="${XDG_CONFIG_HOME:-$HOME/.config}/x360chatpad"
+    local new_config="${XDG_CONFIG_HOME:-$HOME/.config}/x360truewireless"
+    [ -e "$old_unit" ] || [ -e "$BIN_DIR/x360chatpad-daemon" ] || [ -e "$old_rule" ] || [ -d "$old_config" ] || return 0
+    say "Replacing the old x360chatpad install"
+    systemctl --user disable --now x360chatpad.service 2>/dev/null || true
+    pkill -f "$BIN_DIR/x360chatpad-tray" 2>/dev/null || true
+    rm -f "$old_unit" "$BIN_DIR/x360chatpad-daemon" "$BIN_DIR/x360chatpad-tray" \
+        "$APPS_DIR/x360chatpad-settings.desktop" "$AUTOSTART_DIR/x360chatpad-tray.desktop" \
+        "$ICON_DIR/x360chatpad.svg" "$ICON_DIR/x360chatpad-tray-symbolic.svg"
+    systemctl --user daemon-reload
+    if [ -d "$old_config" ] && [ ! -e "$new_config" ]; then
+        say "Moving your settings to $new_config"
+        mv "$old_config" "$new_config"
+    fi
+    # The new rule is installed next; this only removes the old one.
+    if [ -f "$old_rule" ]; then
+        as_root rm -f "$old_rule"
+    fi
+}
+
+# Process names are cut to 15 characters ("x360truewireles" for both binaries), so match the
+# tray by its path rather than with pkill -x.
+stop_tray() {
+    pkill -f "$BIN_DIR/x360truewireless-tray" 2>/dev/null || true
 }
 
 # Install a .desktop file with the binary directory filled in (launchers don't see ~/.local/bin
@@ -92,12 +123,12 @@ has_tray_host() {
 
 # (Re)start the tray icon now if we're in a graphical session, so updates show immediately.
 start_tray() {
-    pkill -x x360chatpad-tra 2>/dev/null || true
+    stop_tray
     [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ] || return 0
     if has_tray_host; then
-        setsid "$BIN_DIR/x360chatpad-tray" >/dev/null 2>&1 < /dev/null &
+        setsid "$BIN_DIR/x360truewireless-tray" >/dev/null 2>&1 < /dev/null &
     elif [[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]]; then
-        say "GNOME has no tray by default. Open \"X360 Chatpad Settings\" from the app menu, or install"
+        say "GNOME has no tray by default. Open \"X360TrueWireless Settings\" from the app menu, or install"
         say "the \"AppIndicator and KStatusNotifierItem Support\" extension for a tray icon."
     fi
 }
@@ -110,10 +141,10 @@ stage_local() {
     [ -x "$HOME/.cargo/bin/cargo" ] && PATH="$HOME/.cargo/bin:$PATH"
     command -v cargo >/dev/null || die "cargo not found; install Rust from https://rustup.rs"
     say "Building release binaries"
-    (cd "$root" && cargo build --release --locked -p x360chatpad-daemon -p x360chatpad-tray)
+    (cd "$root" && cargo build --release --locked -p x360truewireless-daemon -p x360truewireless-tray)
     STAGE="$(mktemp -d)"
     mkdir -p "$STAGE/bin" "$STAGE/share"
-    cp "$root/target/release/x360chatpad-daemon" "$root/target/release/x360chatpad-tray" "$STAGE/bin/"
+    cp "$root/target/release/x360truewireless-daemon" "$root/target/release/x360truewireless-tray" "$STAGE/bin/"
     cp -r "$root"/packaging/* "$STAGE/share/"
 }
 
@@ -130,18 +161,18 @@ stage_release() {
 }
 
 uninstall() {
-    say "Stopping and removing x360chatpad"
+    say "Stopping and removing x360truewireless"
     systemctl --user disable --now "$UNIT" 2>/dev/null || true
-    pkill -x x360chatpad-tra 2>/dev/null || true
-    rm -f "$UNIT_DIR/$UNIT" "$BIN_DIR/x360chatpad-daemon" "$BIN_DIR/x360chatpad-tray" \
-        "$APPS_DIR/x360chatpad-settings.desktop" "$AUTOSTART_DIR/x360chatpad-tray.desktop" \
-        "$ICON_DIR/x360chatpad.svg" "$ICON_DIR/x360chatpad-tray-symbolic.svg"
+    stop_tray
+    rm -f "$UNIT_DIR/$UNIT" "$BIN_DIR/x360truewireless-daemon" "$BIN_DIR/x360truewireless-tray" \
+        "$APPS_DIR/x360truewireless-settings.desktop" "$AUTOSTART_DIR/x360truewireless-tray.desktop" \
+        "$ICON_DIR/x360truewireless.svg" "$ICON_DIR/x360truewireless-tray-symbolic.svg"
     systemctl --user daemon-reload
     if [ -f "$RULE_DEST" ]; then
         as_root rm -f "$RULE_DEST"
         reload_udev
     fi
-    say "Removed. Your settings in ~/.config/x360chatpad were kept."
+    say "Removed. Your settings in ~/.config/x360truewireless were kept."
 }
 
 main() {

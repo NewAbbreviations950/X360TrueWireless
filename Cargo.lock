@@ -3594,17 +3594,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
-name = "x360chatpad-common"
+name = "x360truewireless-common"
 version = "0.1.0"
 dependencies = [
  "evdev",
  "serde",
  "toml",
- "x360chatpad-proto",
+ "x360truewireless-proto",
 ]
 
 [[package]]
-name = "x360chatpad-daemon"
+name = "x360truewireless-daemon"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3614,25 +3614,25 @@ dependencies = [
  "nusb",
  "serde",
  "toml",
- "x360chatpad-common",
- "x360chatpad-proto",
+ "x360truewireless-common",
+ "x360truewireless-proto",
  "xkbcommon-dl",
  "zbus",
 ]
 
 [[package]]
-name = "x360chatpad-proto"
+name = "x360truewireless-proto"
 version = "0.1.0"
 
 [[package]]
-name = "x360chatpad-tray"
+name = "x360truewireless-tray"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "eframe",
  "ksni",
  "resvg",
- "x360chatpad-common",
+ "x360truewireless-common",
  "zbus",
 ]
 

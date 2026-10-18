@@ -1,12 +1,12 @@
 //! What each chatpad key types: the key table (defaults + config overrides, see
-//! `x360chatpad_common::keymap`) turned into key presses through the user's keyboard layout
+//! `x360truewireless_common::keymap`) turned into key presses through the user's keyboard layout
 //! (see `layout.rs`).
 
 use evdev::KeyCode;
-use x360chatpad_common::keymap::{KeyTable, Output};
-use x360chatpad_proto::ChatpadKey;
+use x360truewireless_common::keymap::{KeyTable, Output};
+use x360truewireless_proto::ChatpadKey;
 
-pub use x360chatpad_common::keymap::Layer;
+pub use x360truewireless_common::keymap::Layer;
 
 use crate::layout::{Combo, Layout};
 
@@ -89,7 +89,7 @@ mod tests {
 
     #[test]
     fn disabled_key_types_nothing() {
-        use x360chatpad_common::keymap::Overrides;
+        use x360truewireless_common::keymap::Overrides;
         let mut o = Overrides::new();
         o.entry(Layer::Normal)
             .or_default()

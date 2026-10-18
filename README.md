@@ -1,20 +1,24 @@
-# X360 Chatpad Driver
+# X360TrueWireless
 
-Use an Xbox 360 wireless controller **with its chatpad** on Linux through the official
-Xbox 360 Wireless Receiver. It works on any desktop distro and on the Steam Deck, and it
-plays nicely with Steam Input.
+Full support for Xbox 360 wireless accessories on Linux through the official Xbox 360
+Wireless Receiver: controllers **with their chatpad**, and the **Wireless Racing Wheel with
+force feedback**. It works on any desktop distro and on the Steam Deck, and it plays nicely
+with Steam Input.
 
-The kernel's `xpad` driver supports the controller but ignores the chatpad. This driver
-takes the receiver over from `xpad` (and gives it back when stopped). It exposes:
+The kernel's `xpad` driver supports the controller but ignores the chatpad, and drives the
+wheel only as a gamepad with rumble. This driver takes the receiver over from `xpad` (and
+gives it back when stopped). It exposes:
 
 - **one virtual Xbox 360 pad per controller**, with buttons, sticks, triggers, rumble and
   the player LED. Steam and games see a normal 360 controller.
 - **one virtual keyboard** that all chatpads type into, following your keyboard layout.
+- **a virtual racing wheel** for the Wireless Racing Wheel, with force feedback
+  (experimental, see below).
 
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360ChatDriver/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireless/main/install.sh | bash
 ```
 
 This installs to `~/.local/bin` and runs as a systemd user service that starts when you log
@@ -25,10 +29,13 @@ rule that gives your user access to the receiver. On Steam Deck, set a password 
 To update, run the same command again. To remove:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360ChatDriver/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireless/main/install.sh | bash -s -- --uninstall
 ```
 
 From a checkout, `./install.sh --local` builds and installs the working tree (needs Rust).
+
+This project used to be called x360chatpad. The installer replaces an install under the old
+name (service, udev rule and menu entries) and keeps your settings.
 
 ## Using the chatpad
 
@@ -52,12 +59,28 @@ Clicking it opens a small settings popup:
   a character or pick a special key. Changes apply immediately.
 - Choose the keyboard layout: automatic, or a fixed one.
 
-The popup is also in your app menu as **X360 Chatpad Settings**. That's the way in on GNOME
+The popup is also in your app menu as **X360TrueWireless Settings**. That's the way in on GNOME
 unless you install the "AppIndicator and KStatusNotifierItem Support" extension.
+
+## Racing wheel (experimental)
+
+The Microsoft Xbox 360 Wireless Racing Wheel's force-feedback protocol was never documented;
+it was worked out for this driver (see [docs/protocol.md](docs/protocol.md)). Games get
+constant force, spring, damper, inertia and friction effects, and rumble. Periodic and ramp
+effects are accepted but don't play yet. Keep the wheel on its AC adapter: force feedback
+needs it.
+
+The wheel isn't detected automatically yet. Tell the driver which slot it's on (the quarter
+lit on its ring of light, counting from 0):
+
+```sh
+systemctl --user edit x360truewireless   # add: [Service] Environment=X360TRUEWIRELESS_WHEEL_SLOTS=0
+systemctl --user restart x360truewireless
+```
 
 ## Configuration
 
-`~/.config/x360chatpad/config.toml` (optional):
+`~/.config/x360truewireless/config.toml` (optional):
 
 ```toml
 # Keyboard layout to type for. Detected from KDE, GNOME or the system default if unset.
@@ -74,19 +97,19 @@ E = "KEY_F5"
 ```
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
-the tray menu, or run `systemctl --user restart x360chatpad`.
+the tray menu, or run `systemctl --user restart x360truewireless`.
 
 ## Troubleshooting
 
-- Logs: `journalctl --user -u x360chatpad -f`
+- Logs: `journalctl --user -u x360truewireless -f`
 - "open receiver" errors: the udev rule is missing. Rerun the installer, or replug the receiver.
-- Stopping the service (`systemctl --user stop x360chatpad`) hands the receiver back to
+- Stopping the service (`systemctl --user stop x360truewireless`) hands the receiver back to
   `xpad`, so the controller keeps working without the chatpad.
 
 ## Development
 
 - `cargo test --workspace` runs packet-parsing, keymap and layout tests.
 - Crates: `proto` (USB packets), `common` (config, keymap, D-Bus names), `daemon`, `tray`.
-- `x360chatpad-dump` (built with the daemon) hex-dumps receiver traffic and sends packets
+- `x360truewireless-dump` (built with the daemon) hex-dumps receiver traffic and sends packets
   typed on stdin. It's useful for protocol work; stop the service first.
 - Protocol notes: [docs/protocol.md](docs/protocol.md). Status and plans: [docs/ROADMAP.md](docs/ROADMAP.md)

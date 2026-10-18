@@ -1,4 +1,4 @@
-//! x360chatpad-tray: tray icon for the X360 chatpad driver, and (with `--settings`) its
+//! x360truewireless-tray: tray icon for the X360TrueWireless driver, and (with `--settings`) its
 //! settings window. The settings window runs as its own process because a GUI event loop can
 //! only be created once per process, and the tray must stay alive after it closes.
 
@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
             Err(e) => {
                 // Desktops without a tray (plain GNOME) still have the settings window in the
                 // app menu, so this isn't fatal.
-                eprintln!("{e}; open \"X360 Chatpad Settings\" from the app menu instead");
+                eprintln!("{e}; open \"X360TrueWireless Settings\" from the app menu instead");
                 Ok(())
             }
         },

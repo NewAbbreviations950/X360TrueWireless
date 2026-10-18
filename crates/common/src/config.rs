@@ -1,4 +1,4 @@
-//! User settings in `~/.config/x360chatpad/config.toml`. Every field is optional:
+//! User settings in `~/.config/x360truewireless/config.toml`. Every field is optional:
 //!
 //! ```toml
 //! # Keyboard layout the chatpad should type for. Detected from the desktop if unset.
@@ -31,7 +31,7 @@ pub struct Config {
 
 impl Config {
     pub fn path() -> Option<PathBuf> {
-        Some(config_dir()?.join("x360chatpad/config.toml"))
+        Some(config_dir()?.join("x360truewireless/config.toml"))
     }
 
     /// Load the config. A missing file gives the defaults; a broken one is an error.

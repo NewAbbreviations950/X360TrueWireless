@@ -1,4 +1,4 @@
-//! x360chatpad-daemon: takes an Xbox 360 Wireless Receiver over from xpad and exposes each
+//! x360truewireless-daemon: takes an Xbox 360 Wireless Receiver over from xpad and exposes each
 //! controller as a virtual Xbox 360 pad, plus a shared virtual keyboard for chatpads.
 
 mod actions;
@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use nusb::transfer::{Buffer, In, Interrupt, Out, TransferError};
 use nusb::{DeviceInfo, Endpoint, MaybeFuture};
-use x360chatpad_proto::{Battery, ChatpadEvent, InPacket, out, parse};
+use x360truewireless_proto::{Battery, ChatpadEvent, InPacket, out, parse};
 
 use devices::{ChatpadState, Pad, Wheel};
 use keyboard::Keyboard;
@@ -40,11 +40,11 @@ enum Controller {
 }
 
 /// Slots whose controller should be exposed as a racing wheel, from the comma-separated
-/// `X360CHATPAD_WHEEL_SLOTS` (e.g. `0` or `0,2`). Until the link-info packet's device type
+/// `X360TRUEWIRELESS_WHEEL_SLOTS` (e.g. `0` or `0,2`). Until the link-info packet's device type
 /// is decoded, this is how a wheel is recognised.
 fn wheel_slots() -> [bool; SLOTS as usize] {
     let mut slots = [false; SLOTS as usize];
-    for s in std::env::var("X360CHATPAD_WHEEL_SLOTS")
+    for s in std::env::var("X360TRUEWIRELESS_WHEEL_SLOTS")
         .unwrap_or_default()
         .split(',')
     {
@@ -81,7 +81,7 @@ impl Shared {
         self.battery[slot as usize].store(level.bars(), Ordering::SeqCst);
     }
 
-    fn key_pressed(&self, slot: u8, key: x360chatpad_proto::ChatpadKey) {
+    fn key_pressed(&self, slot: u8, key: x360truewireless_proto::ChatpadKey) {
         if let Some(conn) = &self.dbus {
             dbus::emit_key(conn, slot, key);
         }
@@ -163,7 +163,7 @@ fn main() -> Result<()> {
 /// Returns it along with any config problems, which are reported but not fatal.
 fn load_keymap() -> (Keymap, Vec<String>) {
     let mut problems = Vec::new();
-    let config = x360chatpad_common::config::Config::load().unwrap_or_else(|e| {
+    let config = x360truewireless_common::config::Config::load().unwrap_or_else(|e| {
         problems.push(format!("{e}; using defaults"));
         Default::default()
     });
@@ -172,7 +172,7 @@ fn load_keymap() -> (Keymap, Vec<String>) {
         .map(|(layout, variant)| layout::LayoutName { layout, variant });
     let layout = Layout::load(configured);
     eprintln!("typing for keyboard layout {}", layout.name);
-    let (table, errors) = x360chatpad_common::keymap::KeyTable::with_overrides(&config.keys);
+    let (table, errors) = x360truewireless_common::keymap::KeyTable::with_overrides(&config.keys);
     problems.extend(errors);
     (Keymap::with_table(layout, table), problems)
 }
@@ -238,8 +238,8 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     send(&mut ep_out, &out::presence_inquiry())?;
 
     let is_wheel = wheel_slots()[slot as usize];
-    // Log games' force-feedback requests to a wheel (X360CHATPAD_FF_LOG=1).
-    let ff_log = std::env::var_os("X360CHATPAD_FF_LOG").is_some();
+    // Log games' force-feedback requests to a wheel (X360TRUEWIRELESS_FF_LOG=1).
+    let ff_log = std::env::var_os("X360TRUEWIRELESS_FF_LOG").is_some();
     let mut controller: Option<Controller> = None;
     let mut chatpad = ChatpadState::default();
     let mut indicators = indicators::IndicatorSync::default();

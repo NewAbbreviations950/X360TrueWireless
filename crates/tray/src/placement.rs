@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-const PLUGIN: &str = "x360chatpad-popup-placement";
+const PLUGIN: &str = "x360truewireless-popup-placement";
 
 /// Where to put the popup: the point that was clicked (global coordinates), if known.
 #[derive(Debug, Clone, Copy)]

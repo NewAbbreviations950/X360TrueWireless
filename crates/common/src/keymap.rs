@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use evdev::KeyCode;
 use serde::{Deserialize, Serialize};
-use x360chatpad_proto::ChatpadKey;
+use x360truewireless_proto::ChatpadKey;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

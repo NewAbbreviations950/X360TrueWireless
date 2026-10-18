@@ -1,6 +1,6 @@
 # Xbox 360 Wireless Receiver protocol notes
 
-Verified against a real receiver (045e:0719) with `x360chatpad-dump`; raw logs are in `captures/` (large ones xz-compressed).
+Verified against a real receiver (045e:0719) with `x360truewireless-dump`; raw logs are in `captures/` (large ones xz-compressed).
 Items marked *(xpad)* come from the kernel `xpad` driver and are not independently re-verified yet.
 
 ## USB layout

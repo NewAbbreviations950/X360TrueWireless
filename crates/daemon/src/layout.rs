@@ -300,7 +300,7 @@ fn first(list: &str) -> String {
 }
 
 fn detect_kde() -> Option<LayoutName> {
-    let path = x360chatpad_common::config::config_dir()?.join("kxkbrc");
+    let path = x360truewireless_common::config::config_dir()?.join("kxkbrc");
     let text = std::fs::read_to_string(path).ok()?;
     let get = |key: &str| {
         text.lines()

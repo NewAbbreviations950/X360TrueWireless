@@ -11,7 +11,7 @@ use evdev::{
     AbsInfo, AbsoluteAxisCode, AttributeSet, BusType, EventSummary, EventType, FFEffectCode,
     FFEffectKind, InputEvent, InputId, KeyCode, UInputCode, UinputAbsSetup,
 };
-use x360chatpad_proto::{ChatpadKey, ChatpadKeys, GamepadState, button, led, modifier};
+use x360truewireless_proto::{ChatpadKey, ChatpadKeys, GamepadState, button, led, modifier};
 
 use crate::ffb;
 use crate::keymap::{Keymap, Layer};
