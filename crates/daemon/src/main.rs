@@ -247,7 +247,17 @@ fn run_receiver(info: &DeviceInfo, shared: &Arc<Shared>) -> Result<()> {
         .map(|(iface, slot)| {
             let shared = shared.clone();
             thread::spawn(move || {
-                let result = run_slot(slot, &iface, &shared);
+                // Start the slot again after an error (a failed device call, say), so one
+                // hiccup doesn't leave its controller dead until the driver restarts.
+                let mut result = run_slot(slot, &iface, &shared);
+                while let Err(e) = &result
+                    && !e.is::<ReceiverGone>()
+                    && shared.running.load(Ordering::SeqCst)
+                {
+                    eprintln!("slot {slot}: {e:#}; starting the slot again");
+                    thread::sleep(Duration::from_secs(1));
+                    result = run_slot(slot, &iface, &shared);
+                }
                 if let Err(e) = &result {
                     eprintln!("slot {slot}: {e:#}");
                 }
@@ -411,7 +421,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                         }
                         _ => {}
                     },
-                    Err(TransferError::Disconnected) => anyhow::bail!("receiver unplugged"),
+                    Err(TransferError::Disconnected) => return Err(ReceiverGone.into()),
                     Err(e) => {
                         eprintln!("slot {slot}: read error {e:?}");
                         thread::sleep(Duration::from_millis(100));
@@ -538,6 +548,7 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
     })();
 
     let _ = shared.type_keys(&chatpad.release_all(&shared.keymap.read().unwrap()).keys);
+    shared.devices[slot as usize].store(SlotDevice::Empty.code(), Ordering::SeqCst);
     if controller.is_some() || pending.is_some() {
         shared.set_connected(slot, false);
         let _ = send(&mut ep_out, &out::rumble(0, 0));
@@ -619,6 +630,18 @@ fn new_controller(
         }
     })
 }
+
+/// The receiver was unplugged: the end for every slot.
+#[derive(Debug)]
+struct ReceiverGone;
+
+impl std::fmt::Display for ReceiverGone {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("receiver unplugged")
+    }
+}
+
+impl std::error::Error for ReceiverGone {}
 
 fn send(ep: &mut Endpoint<Interrupt, Out>, packet: &out::Packet) -> Result<()> {
     let mut buf = Buffer::new(packet.len());

@@ -167,7 +167,9 @@ impl Pad {
         for event in events {
             match event.destructure() {
                 EventSummary::UInput(event, UInputCode::UI_FF_UPLOAD, ..) => {
-                    let mut upload = self.dev.process_ff_upload(event)?;
+                    let Some(mut upload) = withdrawn(self.dev.process_ff_upload(event))? else {
+                        continue;
+                    };
                     let id = upload.effect_id();
                     let id = if (0..FF_EFFECTS_MAX as i16).contains(&id) {
                         id
@@ -193,7 +195,9 @@ impl Pad {
                     upload.set_retval(0);
                 }
                 EventSummary::UInput(event, UInputCode::UI_FF_ERASE, ..) => {
-                    let mut erase = self.dev.process_ff_erase(event)?;
+                    let Some(mut erase) = withdrawn(self.dev.process_ff_erase(event))? else {
+                        continue;
+                    };
                     self.effects.remove(&(erase.effect_id() as i16));
                     erase.set_retval(0);
                 }
@@ -435,20 +439,28 @@ impl Wheel {
         for event in events {
             match event.destructure() {
                 EventSummary::UInput(_, UInputCode::UI_FF_UPLOAD, request) => {
-                    let upload = ffb::Upload::begin(self.dev.as_raw_fd(), request)?;
+                    let Some(upload) =
+                        withdrawn(ffb::Upload::begin(self.dev.as_raw_fd(), request))?
+                    else {
+                        continue;
+                    };
                     // The input core has already picked a free id.
                     let id = upload.id();
                     match ffb::from_raw(upload.raw()) {
                         Some(effect) if (0..FF_EFFECTS_MAX as i16).contains(&id) => {
-                            upload.finish(Ok(id))?;
+                            withdrawn(upload.finish(Ok(id)))?;
                             self.effects.insert(id, effect);
                             ops.push(ffb::Op::Upload { id, effect });
                         }
-                        _ => upload.finish(Err(libc::EINVAL))?,
+                        _ => {
+                            withdrawn(upload.finish(Err(libc::EINVAL)))?;
+                        }
                     }
                 }
                 EventSummary::UInput(event, UInputCode::UI_FF_ERASE, ..) => {
-                    let mut erase = self.dev.process_ff_erase(event)?;
+                    let Some(mut erase) = withdrawn(self.dev.process_ff_erase(event))? else {
+                        continue;
+                    };
                     let id = erase.effect_id() as i16;
                     self.effects.remove(&id);
                     erase.set_retval(0);
@@ -472,6 +484,19 @@ impl Wheel {
             }
         }
         Ok(ops)
+    }
+}
+
+/// A force-feedback request the game has already given up on (it waited too long, or its
+/// device was swapped under it): the kernel answers `EINVAL`, and there's nothing to do.
+fn withdrawn<T>(result: io::Result<T>) -> io::Result<Option<T>> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(e) if e.raw_os_error() == Some(libc::EINVAL) => {
+            eprintln!("skipped a force-feedback request the game withdrew");
+            Ok(None)
+        }
+        Err(e) => Err(e),
     }
 }
 
