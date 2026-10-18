@@ -11,7 +11,7 @@
 //! [keys.green]
 //! E = "KEY_F5"
 //!
-//! # How a racing wheel shows up: "wheel" (default) or "controller".
+//! # How a racing wheel shows up: "logitech" (default), "generic" or "controller".
 //! wheel_mode = "controller"
 //! ```
 
@@ -38,11 +38,14 @@ pub struct Config {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WheelMode {
-    /// A sim wheel with force feedback, for games with wheel support. (`joystick` was a
-    /// variant of it in pre-releases.)
+    /// A Logitech G920 with force feedback, so games with a G920 profile set it up
+    /// themselves.
     #[default]
-    #[serde(alias = "joystick")]
-    Wheel,
+    Logitech,
+    /// A generic force-feedback wheel, bound by hand in the game. (`wheel` and `joystick`
+    /// were names for it in pre-releases.)
+    #[serde(alias = "wheel", alias = "joystick")]
+    Generic,
     /// An Xbox 360 pad, for games without wheel support: steering on the left stick, rumble,
     /// and the wheel's own autocentre.
     Controller,
@@ -112,7 +115,7 @@ mod tests {
         let config: Config = toml::from_str("wheel_mode = \"controller\"").unwrap();
         assert_eq!(config.wheel_mode, Some(WheelMode::Controller));
         let config: Config = toml::from_str("wheel_mode = \"joystick\"").unwrap();
-        assert_eq!(config.wheel_mode, Some(WheelMode::Wheel));
+        assert_eq!(config.wheel_mode, Some(WheelMode::Generic));
         assert!(toml::from_str::<Config>("wheel_mode = \"gamepad\"").is_err());
     }
 

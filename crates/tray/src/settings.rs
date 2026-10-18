@@ -529,10 +529,17 @@ impl Settings {
             ui.label("Racing wheel");
             for (mode, label, tip) in [
                 (
-                    WheelMode::Wheel,
-                    "Sim wheel",
-                    "A wheel with force feedback, for games with wheel support. Turn Steam \
+                    WheelMode::Logitech,
+                    "Logitech G920",
+                    "A force-feedback wheel that games see as a Logitech G920, so games with \
+                     a G920 profile set up its buttons and pedals themselves. Turn Steam \
                      Input off for generic controllers so games see the wheel itself.",
+                ),
+                (
+                    WheelMode::Generic,
+                    "Generic wheel",
+                    "A generic force-feedback wheel, for games without a G920 profile. Bind \
+                     its buttons and pedals in the game.",
                 ),
                 (
                     WheelMode::Controller,

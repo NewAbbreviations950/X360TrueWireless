@@ -226,13 +226,42 @@ impl Pad {
     }
 }
 
-/// SDL decides a joystick is a wheel only from a list of USB IDs, and Proton presents only
-/// those to games as DirectInput driving devices with full force feedback; games such as
-/// SnowRunner list nothing else as a wheel. So the wheel takes an ID from that list: the
-/// OpenFFBoard's (a generic open-source force-feedback wheel, in pid.codes' open VID).
-/// Gamepad buttons let SDL map it as a gamepad too, which Proton ignores for wheels.
-const WHEEL_ID: (u16, u16, u16) = (0x1209, 0xffb0, 0x0001);
-const WHEEL_NAME: &str = "Microsoft Xbox 360 Wireless Racing Wheel";
+/// Which wheel the virtual wheel presents itself as. SDL decides a joystick is a wheel only
+/// from a list of USB IDs, and Proton presents only those to games as DirectInput driving
+/// devices with full force feedback; games such as SnowRunner list nothing else as a wheel.
+/// So both layouts take an ID from that list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WheelLayout {
+    /// A Logitech G920, the Xbox-layout Logitech wheel, so games load their own G920 profile
+    /// (button numbers and axes from DiRT 4's `input/actionmaps/lg_g920.xml`).
+    G920,
+    /// The OpenFFBoard's ID (a generic open-source force-feedback wheel, in pid.codes' open
+    /// VID), for games without a G920 profile; everything has to be bound in the game.
+    /// Gamepad buttons let SDL map it as a gamepad too, which Proton ignores for wheels.
+    Generic,
+}
+
+const GENERIC_ID: (u16, u16, u16) = (0x1209, 0xffb0, 0x0001);
+const GENERIC_NAME: &str = "Microsoft Xbox 360 Wireless Racing Wheel";
+const G920_ID: (u16, u16, u16) = (0x046d, 0xc262, 0x0111);
+const G920_NAME: &str = "Logitech G920 Driving Force Racing Wheel";
+
+/// The G920's DirectInput buttons in order (SDL, and so Proton, numbers buttons by key code):
+/// A, B, X, Y, right paddle, left paddle, Menu, View, right stick, left stick, Xbox. The 360
+/// wheel's paddles report as RB and LB.
+const G920_BUTTONS: &[(u16, KeyCode)] = &[
+    (button::A, KeyCode::BTN_TRIGGER),
+    (button::B, KeyCode::BTN_THUMB),
+    (button::X, KeyCode::BTN_THUMB2),
+    (button::Y, KeyCode::BTN_TOP),
+    (button::RB, KeyCode::BTN_TOP2),
+    (button::LB, KeyCode::BTN_PINKIE),
+    (button::START, KeyCode::BTN_BASE),
+    (button::BACK, KeyCode::BTN_BASE2),
+    (button::RS, KeyCode::BTN_BASE3),
+    (button::LS, KeyCode::BTN_BASE4),
+    (button::GUIDE, KeyCode::BTN_BASE5),
+];
 
 /// Every effect type a wheel could play. Periodic and ramp effects aren't played yet
 /// (`wheel_ff`), but they're still advertised so games that use them keep their other effects.
@@ -254,53 +283,82 @@ const WHEEL_FF: &[FFEffectCode] = &[
     FFEffectCode::FF_AUTOCENTER,
 ];
 
-pub struct Wheel {
-    dev: VirtualDevice,
-    effects: HashMap<i16, ffb::Effect>,
+fn buttons(layout: WheelLayout) -> &'static [(u16, KeyCode)] {
+    match layout {
+        WheelLayout::G920 => G920_BUTTONS,
+        WheelLayout::Generic => BUTTONS,
+    }
 }
 
-impl Wheel {
-    pub fn new() -> io::Result<Self> {
-        let keys: AttributeSet<KeyCode> = BUTTONS.iter().map(|&(_, k)| k).collect();
-        let stick = AbsInfo::new(0, -32768, 32767, 0, 0, 0);
-        let pedal = AbsInfo::new(0, 0, 255, 0, 0, 0);
-        let hat = AbsInfo::new(0, -1, 1, 0, 0, 0);
-        let mut builder = VirtualDevice::builder()?
-            .name(WHEEL_NAME)
-            .input_id(InputId::new(
-                BusType::BUS_USB,
-                WHEEL_ID.0,
-                WHEEL_ID.1,
-                WHEEL_ID.2,
-            ))
-            .with_keys(&keys)?
-            .with_ff(&WHEEL_FF.iter().copied().collect::<AttributeSet<_>>())?
-            .with_ff_effects_max(FF_EFFECTS_MAX as u32);
-        for (axis, info) in [
+/// The axes in key-code order, which is the order SDL and Proton number them in. For the
+/// G920 Proton maps the first four to steering, throttle, brake and clutch usages, so there
+/// must be exactly those four.
+fn axes(layout: WheelLayout) -> Vec<(AbsoluteAxisCode, AbsInfo)> {
+    let stick = AbsInfo::new(0, -32768, 32767, 0, 0, 0);
+    let pedal = AbsInfo::new(0, 0, 255, 0, 0, 0);
+    let released = AbsInfo::new(255, 0, 255, 0, 0, 0);
+    let hat = AbsInfo::new(0, -1, 1, 0, 0, 0);
+    let mut axes = match layout {
+        WheelLayout::G920 => vec![
+            (AbsoluteAxisCode::ABS_X, stick),
+            (AbsoluteAxisCode::ABS_Y, released),
+            (AbsoluteAxisCode::ABS_Z, released),
+            (AbsoluteAxisCode::ABS_RZ, released),
+        ],
+        WheelLayout::Generic => vec![
             (AbsoluteAxisCode::ABS_X, stick),
             (AbsoluteAxisCode::ABS_Y, stick),
             (AbsoluteAxisCode::ABS_RX, stick),
             (AbsoluteAxisCode::ABS_RY, stick),
             (AbsoluteAxisCode::ABS_Z, pedal),
             (AbsoluteAxisCode::ABS_RZ, pedal),
-            (AbsoluteAxisCode::ABS_HAT0X, hat),
-            (AbsoluteAxisCode::ABS_HAT0Y, hat),
-        ] {
+        ],
+    };
+    axes.extend([
+        (AbsoluteAxisCode::ABS_HAT0X, hat),
+        (AbsoluteAxisCode::ABS_HAT0Y, hat),
+    ]);
+    axes
+}
+
+pub struct Wheel {
+    dev: VirtualDevice,
+    layout: WheelLayout,
+    effects: HashMap<i16, ffb::Effect>,
+}
+
+impl Wheel {
+    pub fn new(layout: WheelLayout) -> io::Result<Self> {
+        let (id, name) = match layout {
+            WheelLayout::G920 => (G920_ID, G920_NAME),
+            WheelLayout::Generic => (GENERIC_ID, GENERIC_NAME),
+        };
+        let keys: AttributeSet<KeyCode> = buttons(layout).iter().map(|&(_, k)| k).collect();
+        let mut builder = VirtualDevice::builder()?
+            .name(name)
+            .input_id(InputId::new(BusType::BUS_USB, id.0, id.1, id.2))
+            .with_keys(&keys)?
+            .with_ff(&WHEEL_FF.iter().copied().collect::<AttributeSet<_>>())?
+            .with_ff_effects_max(FF_EFFECTS_MAX as u32);
+        for (axis, info) in axes(layout) {
             builder = builder.with_absolute_axis(&UinputAbsSetup::new(axis, info))?;
         }
         let dev = builder.build()?;
         set_nonblocking(&dev)?;
         Ok(Wheel {
             dev,
+            layout,
             effects: HashMap::new(),
         })
     }
 
-    /// XInput reports a wheel like a pad: steering on LX, throttle on RT, brake on LT. Those
-    /// become X, RZ and Z, as on the pad. The other stick values go to Y, RX and RY until a
-    /// capture shows whether the wheel uses them.
+    pub fn layout(&self) -> WheelLayout {
+        self.layout
+    }
+
+    /// XInput reports a wheel like a pad: steering on LX, throttle on RT, brake on LT.
     pub fn emit(&mut self, s: &GamepadState) -> io::Result<()> {
-        let mut events: Vec<InputEvent> = BUTTONS
+        let mut events: Vec<InputEvent> = buttons(self.layout)
             .iter()
             .map(|&(bit, key)| {
                 InputEvent::new(EventType::KEY.0, key.0, (s.buttons & bit != 0) as i32)
@@ -308,13 +366,26 @@ impl Wheel {
             .collect();
         let dir =
             |neg: u16, pos: u16| (s.buttons & pos != 0) as i32 - (s.buttons & neg != 0) as i32;
-        for (axis, value) in [
-            (AbsoluteAxisCode::ABS_X, s.lx as i32),
-            (AbsoluteAxisCode::ABS_Y, !s.ly as i32),
-            (AbsoluteAxisCode::ABS_RX, s.rx as i32),
-            (AbsoluteAxisCode::ABS_RY, !s.ry as i32),
-            (AbsoluteAxisCode::ABS_Z, s.lt as i32),
-            (AbsoluteAxisCode::ABS_RZ, s.rt as i32),
+        let mut axes = vec![(AbsoluteAxisCode::ABS_X, s.lx as i32)];
+        match self.layout {
+            // Released pedals read full, as on a G920: throttle, clutch (none, so always
+            // released) and brake, which Proton presents as Y, Z and Z rotation.
+            WheelLayout::G920 => axes.extend([
+                (AbsoluteAxisCode::ABS_Y, 255 - s.rt as i32),
+                (AbsoluteAxisCode::ABS_Z, 255),
+                (AbsoluteAxisCode::ABS_RZ, 255 - s.lt as i32),
+            ]),
+            // As on the pad. The other stick values go to Y, RX and RY until a capture shows
+            // whether the wheel uses them.
+            WheelLayout::Generic => axes.extend([
+                (AbsoluteAxisCode::ABS_Y, !s.ly as i32),
+                (AbsoluteAxisCode::ABS_RX, s.rx as i32),
+                (AbsoluteAxisCode::ABS_RY, !s.ry as i32),
+                (AbsoluteAxisCode::ABS_Z, s.lt as i32),
+                (AbsoluteAxisCode::ABS_RZ, s.rt as i32),
+            ]),
+        }
+        axes.extend([
             (
                 AbsoluteAxisCode::ABS_HAT0X,
                 dir(button::DPAD_LEFT, button::DPAD_RIGHT),
@@ -323,7 +394,8 @@ impl Wheel {
                 AbsoluteAxisCode::ABS_HAT0Y,
                 dir(button::DPAD_UP, button::DPAD_DOWN),
             ),
-        ] {
+        ]);
+        for (axis, value) in axes {
             events.push(InputEvent::new(EventType::ABSOLUTE.0, axis.0, value));
         }
         self.dev.emit(&events)
@@ -568,7 +640,7 @@ mod tests {
     fn wheel_reports_uploaded_effects() {
         use evdev::{FFEffectData, FFEnvelope, FFReplay, FFTrigger};
 
-        let mut wheel = Wheel::new().unwrap();
+        let mut wheel = Wheel::new(WheelLayout::Generic).unwrap();
         let node = wheel
             .dev
             .enumerate_dev_nodes_blocking()

@@ -81,13 +81,19 @@ no force feedback.
 
 Choose how wheels show up under **Racing wheel** in the settings popup. The change applies
 right away, so switch before starting a game:
-- **Sim wheel** (default): a "Microsoft Xbox 360 Wireless Racing Wheel" with force feedback,
-  for games with wheel support. It has gamepad buttons, so game menus work with it. With
-  Steam Input on, games get Steam's virtual pad in place of the wheel, which has rumble but
-  no force feedback, so turn Steam Input off for generic controllers in Steam's controller
-  settings. Your Xbox controllers stay on Steam Input.
+- **Logitech G920** (default): games see a Logitech G920, Logitech's Xbox-layout wheel, with
+  force feedback. Games with a G920 profile set up the buttons and pedals themselves.
+- **Generic wheel**: a generic force-feedback wheel, for games without a G920 profile. Bind
+  its buttons and pedals in the game.
 - **Xbox controller**: an ordinary Xbox 360 controller, for games without wheel support.
   Steering is the left stick, and you get rumble and the wheel's own centring.
+
+For both wheel modes, turn Steam Input off for generic controllers in Steam's controller
+settings: with it on, games get Steam's virtual pad in place of the wheel, which has rumble
+but no force feedback. Your Xbox controllers stay on Steam Input.
+
+Tested with DiRT 4 on the Steam Deck (as a generic wheel). SnowRunner saw the generic wheel
+but sent it no force feedback.
 
 ## Configuration
 
@@ -108,7 +114,7 @@ E = "KEY_F5"
 ```
 
 `wheel_mode` (a top-level setting, above any `[keys…]` section) is the popup's Racing wheel
-choice: `"wheel"` (default) or `"controller"`.
+choice: `"logitech"` (default), `"generic"` or `"controller"`.
 
 The settings popup edits this file for you. After editing it by hand, choose "Reload" in
 the tray menu, or run `systemctl --user restart x360truewireless`.

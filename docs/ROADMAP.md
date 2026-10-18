@@ -208,6 +208,18 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       guess), and wheels show no battery (on AC without batteries they report empty). Next:
       why SnowRunner skips generic wheels (profiles by VID/PID?), a mode switch for game
       mode (a wheel button combo), the periodic block.
+    - **rc6: Logitech G920 mode (default).** DiRT 4 had to be rebound every session as a
+      generic wheel, and SnowRunner ignores generic wheels, so the wheel can present itself
+      as a G920 (046d:c262, the Xbox-layout Logitech wheel; in SDL's wheel list, and the one
+      wheel Proton special-cases: its four axes become steering, throttle, brake and clutch
+      usages, and it's typed as a dual-pedal wheel). Layout from DiRT 4's
+      `input/actionmaps/lg_g920.xml`: buttons 1–11 = A, B, X, Y, right paddle, left paddle,
+      Menu, View, RSB, LSB, Xbox; throttle Y and brake Z rotation, both reading full when
+      released ("negative"). To test: DiRT 4 and SnowRunner pick it up without binding, the
+      pedals and paddles work, and forces play. Caveat: G920 profiles assume 900° of
+      rotation and the 360 wheel has about 270°. Later: a Thrustmaster TMX mode (also in
+      DiRT 4's profiles, `tm_tmx.xml`) and older wheels with fewer buttons and pedals
+      (Driving Force GT, G25/G27) if a game needs them.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.

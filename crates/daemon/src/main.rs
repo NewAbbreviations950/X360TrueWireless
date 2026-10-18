@@ -23,7 +23,7 @@ use nusb::{DeviceInfo, Endpoint, MaybeFuture};
 use x360truewireless_common::config::WheelMode;
 use x360truewireless_proto::{Battery, ChatpadEvent, Device, InPacket, out, parse};
 
-use devices::{ChatpadState, Pad, Wheel};
+use devices::{ChatpadState, Pad, Wheel, WheelLayout};
 use keyboard::Keyboard;
 use keymap::Keymap;
 use layout::Layout;
@@ -54,7 +54,10 @@ impl Controller {
     fn wheel_mode(&self) -> Option<WheelMode> {
         match self {
             Controller::Pad(_) => None,
-            Controller::Wheel(..) => Some(WheelMode::Wheel),
+            Controller::Wheel(wheel, _) => Some(match wheel.layout() {
+                WheelLayout::G920 => WheelMode::Logitech,
+                WheelLayout::Generic => WheelMode::Generic,
+            }),
             Controller::WheelPad(_) => Some(WheelMode::Controller),
         }
     }
@@ -550,17 +553,21 @@ fn new_controller(
             shared.battery[slot as usize].store(0, Ordering::SeqCst);
             let mode = *shared.wheel_mode.read().unwrap();
             eprintln!("slot {slot}: racing wheel ({mode:?} mode)");
-            if mode == WheelMode::Controller {
-                // No game forces in this mode: just the wheel's own autocentre.
-                for p in wheel_ff::Encoder::autocentre_only() {
-                    send(ep_out, &p)?;
+            let layout = match mode {
+                WheelMode::Logitech => WheelLayout::G920,
+                WheelMode::Generic => WheelLayout::Generic,
+                WheelMode::Controller => {
+                    // No game forces in this mode: just the wheel's own autocentre.
+                    for p in wheel_ff::Encoder::autocentre_only() {
+                        send(ep_out, &p)?;
+                    }
+                    return Ok(Controller::WheelPad(
+                        Pad::new().context("create virtual pad")?,
+                    ));
                 }
-                return Ok(Controller::WheelPad(
-                    Pad::new().context("create virtual pad")?,
-                ));
-            }
+            };
             Controller::Wheel(
-                Wheel::new().context("create virtual wheel")?,
+                Wheel::new(layout).context("create virtual wheel")?,
                 wheel_ff::Encoder::new(),
             )
         }
