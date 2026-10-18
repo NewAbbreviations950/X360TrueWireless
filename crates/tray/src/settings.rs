@@ -101,15 +101,15 @@ const SPECIAL_KEYS: &[(&str, &str)] = &[
 
 const APP_ID: &str = "x360truewireless";
 
-/// Top-down pictures of a controller, traced from photos (outline points measured on a
-/// top-down photo of a controller with a chatpad, mirrored). Drawn in two colours, swapped
-/// for the theme's at runtime.
+/// Top-down pictures of a controller, without and with its chatpad, traced from photos taken
+/// straight down on one (the outline averaged with its mirror image; buttons and keys measured
+/// on the photos). Drawn in two colours, swapped for the theme's at runtime.
 const CONTROLLER_SVG: &str = include_str!("icons/controller.svg");
 const CHATPAD_SVG: &str = include_str!("icons/chatpad.svg");
 const SVG_BODY: &str = "#b0b0b0";
 const SVG_DETAIL: &str = "#303030";
-/// The pictures' size in the popup (their viewBox is 1024 by 900).
-const ICON: Vec2 = Vec2::new(76.0, 66.8);
+/// How wide the pictures are in the popup; their height follows from their shape.
+const ICON_WIDTH: f32 = 78.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Page {
@@ -342,7 +342,7 @@ impl Settings {
                 let body = mix(p.button, p.text, if dim { 0.25 } else { 0.6 });
                 let detail = mix(p.window, p.button, 0.5);
                 let svg = if chatpad { CHATPAD_SVG } else { CONTROLLER_SVG };
-                let image = render_svg(svg, body, detail, ICON * scale);
+                let image = render_svg(svg, body, detail, ICON_WIDTH * scale);
                 ctx.load_texture(
                     format!("device-{chatpad}-{dim}"),
                     image,
@@ -379,12 +379,7 @@ impl Settings {
                 egui::StrokeKind::Inside,
             );
             let icon = self.icon(ui.ctx(), false, true);
-            ui.painter().image(
-                icon.id(),
-                Rect::from_center_size(rect.center() - egui::vec2(0.0, 30.0), ICON),
-                Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                Color32::WHITE,
-            );
+            paint_icon(ui.painter(), &icon, rect.center() - egui::vec2(0.0, 30.0));
             let painter = ui.painter();
             painter.text(
                 rect.center() + egui::vec2(0.0, 20.0),
@@ -450,12 +445,7 @@ impl Settings {
             wheel_icon(&painter, centre, &p);
         } else {
             let icon = self.icon(ui.ctx(), device == SlotDevice::Chatpad, connecting);
-            painter.image(
-                icon.id(),
-                Rect::from_center_size(centre, ICON),
-                Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                Color32::WHITE,
-            );
+            paint_icon(&painter, &icon, centre);
         }
         let name = match device {
             SlotDevice::Connecting => "Connecting…",
@@ -1074,27 +1064,42 @@ fn wheel_icon(painter: &egui::Painter, c: egui::Pos2, p: &Palette) {
     }
 }
 
-/// Render one of our two-colour SVGs at `size` pixels, in `body` and `detail`.
-fn render_svg(svg: &str, body: Color32, detail: Color32, size: Vec2) -> egui::ColorImage {
+/// Draw a controller picture centred on `c`, `ICON_WIDTH` wide.
+fn paint_icon(painter: &egui::Painter, icon: &egui::TextureHandle, c: egui::Pos2) {
+    let [w, h] = icon.size();
+    let size = egui::vec2(ICON_WIDTH, ICON_WIDTH * h as f32 / w.max(1) as f32);
+    painter.image(
+        icon.id(),
+        Rect::from_center_size(c, size),
+        Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+        Color32::WHITE,
+    );
+}
+
+/// Render one of our two-colour SVGs `width` pixels wide, in `body` and `detail`.
+fn render_svg(svg: &str, body: Color32, detail: Color32, width: f32) -> egui::ColorImage {
     use resvg::{tiny_skia, usvg};
     let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
     let svg = svg
         .replace(SVG_BODY, &hex(body))
         .replace(SVG_DETAIL, &hex(detail));
-    let [w, h] = [size.x.round() as u32, size.y.round() as u32];
+    let Ok(tree) = usvg::Tree::from_str(&svg, &usvg::Options::default()) else {
+        return egui::ColorImage::new([1, 1], vec![Color32::TRANSPARENT]);
+    };
+    let scale = width / tree.size().width();
+    let [w, h] = [
+        width.round() as u32,
+        (tree.size().height() * scale).round() as u32,
+    ];
     let blank = || {
         egui::ColorImage::new(
             [w as usize, h as usize],
             vec![Color32::TRANSPARENT; (w * h) as usize],
         )
     };
-    let (Ok(tree), Some(mut pixmap)) = (
-        usvg::Tree::from_str(&svg, &usvg::Options::default()),
-        tiny_skia::Pixmap::new(w, h),
-    ) else {
+    let Some(mut pixmap) = tiny_skia::Pixmap::new(w, h) else {
         return blank();
     };
-    let scale = (w as f32 / tree.size().width()).min(h as f32 / tree.size().height());
     resvg::render(
         &tree,
         tiny_skia::Transform::from_scale(scale, scale),
