@@ -95,9 +95,10 @@ but no force feedback. Your Xbox controllers stay on Steam Input.
 
 Tested on the Steam Deck with DiRT 4, and SnowRunner. SnowRunner needs Proton 6.3 for force
 feedback (choose it under the game's Properties, Compatibility): Proton 7 and later reject the
-way it asks for the wheel's force-feedback axis, so it sends no forces. Set the wheel to
-**Logitech G920** in the popup, and in the game's controls choose DirectInput with the
-"Logitech G923 (Xbox)" layout.
+way it asks for the wheel's force-feedback axis, so it sends no forces. In the game's
+controls, choose Thrustmaster with the TX preset (wheel mode Thrustmaster TMX), or
+DirectInput with the "Logitech G923 (Xbox)" layout (wheel mode Logitech G920). Pick the
+wheel mode before starting the game: SnowRunner sets up force feedback only at launch.
 
 ## Configuration
 

@@ -235,10 +235,14 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       RSB, View and Xbox are guesses (DiRT's TMX binds look back to button 4 and select to
       button 12); check them in DiRT's controls screen. The old `generic` setting now
       means the TMX.
-    - **SnowRunner works on Proton 6.3.** Right controls came from G920 mode with the game
-      on DirectInput and its "Logitech G923 Xbox layout" preset; TMX mode with the game's TX
-      or T150 presets didn't map right (it has no TMX preset, and the TX's numbering differs
-      from the TMX's in DiRT 4 too). On Proton 7 and later it calls `EnumObjects(DIDFT_FFACTUATOR | DIDFT_AXIS)`,
+    - **SnowRunner works on Proton 6.3**, in both wheel modes: TMX mode with the game's
+      Thrustmaster input and TX preset, or G920 mode with DirectInput and its "Logitech G923
+      Xbox layout" preset; both map right. Switching modes mid-game loses force feedback
+      (the game sets effects up on the wheel it found at launch). A switch also once killed
+      slot 1's thread with EINVAL from a withdrawn force-feedback request; such requests are
+      now skipped, and a failed slot restarts. Still to look at: SnowRunner forgets the
+      wheel input type between launches (another controller connected, or the wheel's
+      enumeration order changing under Proton 6.3?). On Proton 7 and later it calls `EnumObjects(DIDFT_FFACTUATOR | DIDFT_AXIS)`,
       which Wine's dinput rejects since the Wine 7 rewrite (Wine 6 filtered by type
       instead), so it never creates effects; checked in Proton 7.0/8.0/11 sources and on
       the Deck with 8, 11 and Experimental. On 6.3 it keeps a friction effect and a constant
