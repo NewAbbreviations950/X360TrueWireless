@@ -5,6 +5,7 @@
 //! app can't place itself next to the tray, so the compositor decides where it appears.) It
 //! resizes to fit what it shows. Changes are saved and applied as soon as they're made.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -100,6 +101,16 @@ const SPECIAL_KEYS: &[(&str, &str)] = &[
 
 const APP_ID: &str = "x360truewireless";
 
+/// Top-down pictures of a controller, traced from photos (outline points measured on a
+/// top-down photo of a controller with a chatpad, mirrored). Drawn in two colours, swapped
+/// for the theme's at runtime.
+const CONTROLLER_SVG: &str = include_str!("icons/controller.svg");
+const CHATPAD_SVG: &str = include_str!("icons/chatpad.svg");
+const SVG_BODY: &str = "#b0b0b0";
+const SVG_DETAIL: &str = "#303030";
+/// The pictures' size in the popup (their viewBox is 1024 by 900).
+const ICON: Vec2 = Vec2::new(76.0, 66.8);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Page {
     /// The connected slots.
@@ -172,6 +183,8 @@ struct Settings {
     /// The window size being asked for, how many times, and when last.
     resize: (Vec2, u8, Instant),
     anchor: Option<Anchor>,
+    /// Rendered controller pictures, by (chatpad, dimmed).
+    icons: HashMap<(bool, bool), egui::TextureHandle>,
     config: Config,
     load_error: Option<String>,
     layer: Layer,
@@ -220,6 +233,7 @@ impl Settings {
             page: Page::Slots,
             resize: (Vec2::ZERO, 0, Instant::now()),
             anchor,
+            icons: HashMap::new(),
             config,
             load_error,
             layer: Layer::Normal,
@@ -318,6 +332,26 @@ impl Settings {
         });
     }
 
+    /// The controller picture (with a chatpad or not), dimmed for one still connecting.
+    fn icon(&mut self, ctx: &egui::Context, chatpad: bool, dim: bool) -> egui::TextureHandle {
+        let p = &self.palette;
+        let scale = ctx.pixels_per_point();
+        self.icons
+            .entry((chatpad, dim))
+            .or_insert_with(|| {
+                let body = mix(p.button, p.text, if dim { 0.25 } else { 0.6 });
+                let detail = mix(p.window, p.button, 0.5);
+                let svg = if chatpad { CHATPAD_SVG } else { CONTROLLER_SVG };
+                let image = render_svg(svg, body, detail, ICON * scale);
+                ctx.load_texture(
+                    format!("device-{chatpad}-{dim}"),
+                    image,
+                    egui::TextureOptions::LINEAR,
+                )
+            })
+            .clone()
+    }
+
     fn slots_ui(&mut self, ui: &mut egui::Ui) {
         let p = self.palette.clone();
         let status = self.status.lock().unwrap().clone();
@@ -344,13 +378,14 @@ impl Settings {
                 Stroke::new(1.0, mix(p.window, p.text, 0.2)),
                 egui::StrokeKind::Inside,
             );
-            device_icon(
-                painter,
-                rect.center() - egui::vec2(0.0, 30.0),
-                SlotDevice::Controller,
-                &p,
-                true,
+            let icon = self.icon(ui.ctx(), false, true);
+            ui.painter().image(
+                icon.id(),
+                Rect::from_center_size(rect.center() - egui::vec2(0.0, 30.0), ICON),
+                Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                Color32::WHITE,
             );
+            let painter = ui.painter();
             painter.text(
                 rect.center() + egui::vec2(0.0, 20.0),
                 Align2::CENTER_CENTER,
@@ -391,6 +426,8 @@ impl Settings {
     ) {
         let p = self.palette.clone();
         let (rect, _) = ui.allocate_exact_size(BOX, Sense::hover());
+        // Widgets go in a child, so placing them doesn't move the row's cursor.
+        let ui = &mut ui.new_child(egui::UiBuilder::new().max_rect(rect));
         let inner = rect.shrink(12.0);
         let painter = ui.painter().clone();
         painter.rect(
@@ -408,13 +445,18 @@ impl Settings {
             p.text,
         );
         let connecting = device == SlotDevice::Connecting;
-        device_icon(
-            &painter,
-            egui::pos2(inner.center().x, inner.top() + 56.0),
-            device,
-            &p,
-            connecting,
-        );
+        let centre = egui::pos2(inner.center().x, inner.top() + 56.0);
+        if device == SlotDevice::Wheel {
+            wheel_icon(&painter, centre, &p);
+        } else {
+            let icon = self.icon(ui.ctx(), device == SlotDevice::Chatpad, connecting);
+            painter.image(
+                icon.id(),
+                Rect::from_center_size(centre, ICON),
+                Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+        }
         let name = match device {
             SlotDevice::Connecting => "Connecting…",
             SlotDevice::Chatpad => "Controller + chatpad",
@@ -1018,63 +1060,51 @@ fn gear_button(ui: &mut egui::Ui, rect: Rect, p: &Palette, on: bool) -> egui::Re
     response.on_hover_text("Settings")
 }
 
-/// A picture of what's connected, about 80 by 56 points around `c`.
-fn device_icon(painter: &egui::Painter, c: egui::Pos2, device: SlotDevice, p: &Palette, dim: bool) {
-    let body = mix(p.button, p.text, if dim { 0.25 } else { 0.6 });
-    let detail = mix(p.window, p.button, 0.5);
-    let at = |x: f32, y: f32| c + egui::vec2(x, y);
-    if device == SlotDevice::Wheel {
-        painter.circle_stroke(c, 25.0, Stroke::new(6.0, body));
-        painter.circle_filled(c, 7.0, body);
-        for (x, y) in [(-1.0, 0.0), (1.0, 0.0), (0.0, 1.0)] {
-            let dir = egui::vec2(x, y);
-            painter.line_segment([c + dir * 6.0, c + dir * 23.0], Stroke::new(5.0, body));
-        }
-        return;
+/// A steering wheel, about 56 points across, around `c`.
+fn wheel_icon(painter: &egui::Painter, c: egui::Pos2, p: &Palette) {
+    let body = mix(p.button, p.text, 0.6);
+    painter.circle_stroke(c, 25.0, Stroke::new(6.0, body));
+    painter.circle_filled(c, 7.0, body);
+    for dir in [
+        egui::vec2(-1.0, 0.0),
+        egui::vec2(1.0, 0.0),
+        egui::vec2(0.0, 1.0),
+    ] {
+        painter.line_segment([c + dir * 6.0, c + dir * 23.0], Stroke::new(5.0, body));
     }
-    // A chatpad sits below the controller, so the controller moves up for it.
-    let chatpad = device == SlotDevice::Chatpad;
-    let c = if chatpad { at(0.0, -9.0) } else { c };
-    let at = |x: f32, y: f32| c + egui::vec2(x, y);
-    painter.circle_filled(at(-19.0, 7.0), 11.0, body);
-    painter.circle_filled(at(19.0, 7.0), 11.0, body);
-    painter.rect_filled(
-        Rect::from_center_size(at(0.0, -2.0), egui::vec2(58.0, 24.0)),
-        CornerRadius::same(11),
-        body,
+}
+
+/// Render one of our two-colour SVGs at `size` pixels, in `body` and `detail`.
+fn render_svg(svg: &str, body: Color32, detail: Color32, size: Vec2) -> egui::ColorImage {
+    use resvg::{tiny_skia, usvg};
+    let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+    let svg = svg
+        .replace(SVG_BODY, &hex(body))
+        .replace(SVG_DETAIL, &hex(detail));
+    let [w, h] = [size.x.round() as u32, size.y.round() as u32];
+    let blank = || {
+        egui::ColorImage::new(
+            [w as usize, h as usize],
+            vec![Color32::TRANSPARENT; (w * h) as usize],
+        )
+    };
+    let (Ok(tree), Some(mut pixmap)) = (
+        usvg::Tree::from_str(&svg, &usvg::Options::default()),
+        tiny_skia::Pixmap::new(w, h),
+    ) else {
+        return blank();
+    };
+    let scale = (w as f32 / tree.size().width()).min(h as f32 / tree.size().height());
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
     );
-    painter.circle_filled(at(-16.0, -4.0), 4.5, detail);
-    painter.circle_filled(at(8.0, 5.0), 4.5, detail);
-    for (x, y) in [(16.0, -9.0), (12.0, -5.0), (20.0, -5.0), (16.0, -1.0)] {
-        painter.circle_filled(at(x, y), 2.0, detail);
-    }
-    painter.rect_filled(
-        Rect::from_center_size(at(-6.0, 5.0), egui::vec2(8.0, 2.5)),
-        CornerRadius::ZERO,
-        detail,
-    );
-    painter.rect_filled(
-        Rect::from_center_size(at(-6.0, 5.0), egui::vec2(2.5, 8.0)),
-        CornerRadius::ZERO,
-        detail,
-    );
-    if chatpad {
-        let pad = Rect::from_center_size(at(0.0, 26.0), egui::vec2(50.0, 14.0));
-        painter.rect_filled(pad, CornerRadius::same(4), body);
-        for row in 0..2 {
-            for col in 0..7 {
-                let key = egui::pos2(
-                    pad.left() + 6.0 + col as f32 * 6.4,
-                    pad.top() + 4.0 + row as f32 * 5.5,
-                );
-                painter.rect_filled(
-                    Rect::from_center_size(key, egui::vec2(3.6, 3.0)),
-                    CornerRadius::same(1),
-                    detail,
-                );
-            }
-        }
-    }
+    // tiny-skia's pixels are premultiplied, like egui's.
+    let pixels = (pixmap.pixels().iter())
+        .map(|px| Color32::from_rgba_premultiplied(px.red(), px.green(), px.blue(), px.alpha()))
+        .collect();
+    egui::ColorImage::new([w as usize, h as usize], pixels)
 }
 
 fn key_width(key: ChatpadKey) -> f32 {
