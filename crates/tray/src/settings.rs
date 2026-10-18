@@ -1,4 +1,4 @@
-//! The settings popup: driver status, keyboard layout, and key remapping.
+//! The settings popup: driver status, keyboard layout, key remapping and the wheel mode.
 //!
 //! It's a borderless window that closes when it loses focus, like a tray popup. (On Wayland an
 //! app can't place itself next to the tray, so the compositor decides where it appears.)
@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Vec2};
-use x360truewireless_common::config::Config;
+use x360truewireless_common::config::{Config, WheelMode};
 use x360truewireless_common::keymap::{KeyTable, Layer, Output};
 use x360truewireless_common::{Battery, ChatpadKey};
 
@@ -516,9 +516,56 @@ impl Settings {
                 }
             });
         });
+        self.wheel_ui(ui);
         if let Some(e) = &self.load_error {
             ui.colored_label(p.warn, format!("Config problem: {e}"));
         }
+    }
+
+    fn wheel_ui(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette.clone();
+        let current = self.config.wheel_mode.unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.label("Racing wheel");
+            for (mode, label, tip) in [
+                (
+                    WheelMode::Wheel,
+                    "Sim wheel",
+                    "A wheel with force feedback, for games with wheel support. \
+                     Turn Steam Input off for generic controllers so games see it.",
+                ),
+                (
+                    WheelMode::Controller,
+                    "Xbox controller",
+                    "An Xbox 360 controller, for games without wheel support: steering on the \
+                     left stick, with rumble and the wheel's own centring.",
+                ),
+                (
+                    WheelMode::Joystick,
+                    "Joystick",
+                    "A sim wheel without gamepad buttons, for games that ignore the wheel \
+                     because it looks like a gamepad.",
+                ),
+            ] {
+                let selected = current == mode;
+                let text =
+                    egui::RichText::new(label).color(if selected { p.accent_text } else { p.text });
+                let button = egui::Button::new(text)
+                    .fill(if selected { p.accent } else { p.button })
+                    .corner_radius(CornerRadius::same(14))
+                    .min_size(egui::vec2(78.0, 26.0));
+                if ui.add(button).on_hover_text(tip).clicked() && !selected {
+                    self.config.wheel_mode = (mode != WheelMode::default()).then_some(mode);
+                    self.save();
+                }
+            }
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new("Switch before starting a game")
+                    .color(p.weak_text)
+                    .small(),
+            );
+        });
     }
 
     /// Parse "layout" or "layout(variant)" from the layout field and save it.

@@ -11,8 +11,8 @@
 //! [keys.green]
 //! E = "KEY_F5"
 //!
-//! # How a racing wheel shows up: "gamepad" (default) or "joystick". Applies when it connects.
-//! wheel_layout = "joystick"
+//! # How a racing wheel shows up: "wheel" (default), "controller" or "joystick".
+//! wheel_mode = "controller"
 //! ```
 
 use std::path::PathBuf;
@@ -29,20 +29,24 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub wheel_layout: Option<WheelLayout>,
+    pub wheel_mode: Option<WheelMode>,
     #[serde(skip_serializing_if = "Overrides::is_empty")]
     pub keys: Overrides,
 }
 
-/// How a racing wheel shows up to games. Both keep the steering, pedals and force feedback.
+/// How a racing wheel shows up to games.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum WheelLayout {
-    /// Gamepad buttons and trigger axes, so SDL, Steam and Proton treat it as a gamepad and
-    /// game menus work with it.
+pub enum WheelMode {
+    /// A sim wheel with force feedback. It has gamepad buttons and trigger axes, so SDL,
+    /// Steam and Proton also treat it as a gamepad and game menus work with it.
     #[default]
-    Gamepad,
-    /// A plain joystick, for games that skip gamepads when they look for a wheel.
+    Wheel,
+    /// An Xbox 360 pad, for games without wheel support: steering on the left stick, rumble,
+    /// and the wheel's own autocentre.
+    Controller,
+    /// A sim wheel that's a plain joystick, for games that skip gamepads when they look for
+    /// a wheel.
     Joystick,
 }
 
@@ -100,16 +104,16 @@ mod tests {
         let config: Config = toml::from_str(text).unwrap();
         assert_eq!(config.layout.as_deref(), Some("no"));
         assert_eq!(config.keys[&Layer::Green]["E"], "KEY_F5");
-        assert_eq!(config.wheel_layout, None);
+        assert_eq!(config.wheel_mode, None);
         let back: Config = toml::from_str(&toml::to_string_pretty(&config).unwrap()).unwrap();
         assert_eq!(back, config);
     }
 
     #[test]
-    fn wheel_layout() {
-        let config: Config = toml::from_str("wheel_layout = \"joystick\"").unwrap();
-        assert_eq!(config.wheel_layout, Some(WheelLayout::Joystick));
-        assert!(toml::from_str::<Config>("wheel_layout = \"wheel\"").is_err());
+    fn wheel_mode() {
+        let config: Config = toml::from_str("wheel_mode = \"controller\"").unwrap();
+        assert_eq!(config.wheel_mode, Some(WheelMode::Controller));
+        assert!(toml::from_str::<Config>("wheel_mode = \"gamepad\"").is_err());
     }
 
     #[test]

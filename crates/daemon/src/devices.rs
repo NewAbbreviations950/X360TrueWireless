@@ -11,7 +11,6 @@ use evdev::{
     AbsInfo, AbsoluteAxisCode, AttributeSet, BusType, EventSummary, EventType, FFEffectCode,
     FFEffectKind, InputEvent, InputId, KeyCode, UInputCode, UinputAbsSetup,
 };
-use x360truewireless_common::config::WheelLayout;
 use x360truewireless_proto::{ChatpadKey, ChatpadKeys, GamepadState, button, led, modifier};
 
 use crate::ffb;
@@ -233,8 +232,16 @@ impl Pad {
 const WHEEL_ID: (u16, u16, u16) = (0x1209, 0x0001, 0x0001);
 const WHEEL_NAME: &str = "Microsoft Xbox 360 Wireless Racing Wheel";
 
-/// Joystick buttons for `WheelLayout::Joystick`, so SDL doesn't guess a gamepad mapping.
-/// The gamepad layout uses the pad's `BUTTONS`.
+/// How a sim wheel's buttons and pedals are laid out (`WheelMode::Controller` is a `Pad`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WheelLayout {
+    /// The pad's buttons and trigger axes, so SDL maps it as a gamepad.
+    Gamepad,
+    /// Joystick buttons, so SDL doesn't guess a gamepad mapping.
+    Joystick,
+}
+
+/// Joystick buttons for `WheelLayout::Joystick`. The gamepad layout uses `BUTTONS`.
 const JOYSTICK_BUTTONS: &[(u16, KeyCode)] = &[
     (button::A, KeyCode::BTN_TRIGGER),
     (button::B, KeyCode::BTN_THUMB),
@@ -318,6 +325,10 @@ impl Wheel {
             layout,
             effects: HashMap::new(),
         })
+    }
+
+    pub fn layout(&self) -> WheelLayout {
+        self.layout
     }
 
     /// XInput reports a wheel like a pad: steering on LX, throttle on RT, brake on LT.

@@ -202,6 +202,12 @@ impl Encoder {
         }
     }
 
+    /// Full device gain and the wheel's own autocentre, for a wheel that games drive as a
+    /// controller (rumble only), so no encoder runs.
+    pub fn autocentre_only() -> [Packet; 2] {
+        [device(0x7f), device(0x20)]
+    }
+
     /// Stop everything and give the wheel its autocentre back, e.g. before disconnecting.
     pub fn stop_all(&mut self, out: &mut Vec<Packet>) {
         out.push(device(0x03));

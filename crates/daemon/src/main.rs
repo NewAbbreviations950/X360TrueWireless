@@ -20,9 +20,10 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use nusb::transfer::{Buffer, In, Interrupt, Out, TransferError};
 use nusb::{DeviceInfo, Endpoint, MaybeFuture};
+use x360truewireless_common::config::WheelMode;
 use x360truewireless_proto::{Battery, ChatpadEvent, Device, InPacket, out, parse};
 
-use devices::{ChatpadState, Pad, Wheel};
+use devices::{ChatpadState, Pad, Wheel, WheelLayout};
 use keyboard::Keyboard;
 use keymap::Keymap;
 use layout::Layout;
@@ -39,7 +40,24 @@ const BATTERY_REQUEST_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// What a connected controller looks like to games.
 enum Controller {
     Pad(Pad),
+    /// A racing wheel as a sim wheel with force feedback.
     Wheel(Wheel, wheel_ff::Encoder),
+    /// A racing wheel as an Xbox controller.
+    WheelPad(Pad),
+}
+
+impl Controller {
+    /// The mode a racing wheel was set up in; None for a controller.
+    fn wheel_mode(&self) -> Option<WheelMode> {
+        match self {
+            Controller::Pad(_) => None,
+            Controller::Wheel(wheel, _) => Some(match wheel.layout() {
+                WheelLayout::Gamepad => WheelMode::Wheel,
+                WheelLayout::Joystick => WheelMode::Joystick,
+            }),
+            Controller::WheelPad(_) => Some(WheelMode::Controller),
+        }
+    }
 }
 
 /// Slots whose controller should be exposed as a racing wheel whatever it reports, from the
@@ -61,6 +79,8 @@ fn wheel_slots() -> [bool; SLOTS as usize] {
 struct Shared {
     running: AtomicBool,
     keymap: RwLock<Keymap>,
+    /// How racing wheels show up; a change applies to connected wheels at once.
+    wheel_mode: RwLock<WheelMode>,
     /// Which controller slots have a controller connected.
     connected: [AtomicBool; SLOTS as usize],
     /// Last battery level reported per slot, as bars (1–4); 0 = unknown.
@@ -92,8 +112,9 @@ impl Shared {
 
     /// Re-read the config and re-detect the layout. Returns config problems, if any.
     fn reload(&self) -> Vec<String> {
-        let (keymap, problems) = load_keymap();
+        let (keymap, wheel_mode, problems) = load_config();
         *self.keymap.write().unwrap() = keymap;
+        *self.wheel_mode.write().unwrap() = wheel_mode;
         problems
     }
 
@@ -106,7 +127,7 @@ impl Shared {
 }
 
 fn main() -> Result<()> {
-    let (keymap, problems) = load_keymap();
+    let (keymap, wheel_mode, problems) = load_config();
     for p in problems {
         eprintln!("config: {p}");
     }
@@ -115,6 +136,7 @@ fn main() -> Result<()> {
     let shared = Arc::new_cyclic(|weak| Shared {
         running: AtomicBool::new(true),
         keymap: RwLock::new(keymap),
+        wheel_mode: RwLock::new(wheel_mode),
         connected: Default::default(),
         battery: Default::default(),
         dbus: dbus::serve(weak.clone()),
@@ -163,8 +185,9 @@ fn main() -> Result<()> {
 }
 
 /// Build the keymap from config.toml and the detected (or configured) keyboard layout.
-/// Returns it along with any config problems, which are reported but not fatal.
-fn load_keymap() -> (Keymap, Vec<String>) {
+/// Returns it and the wheel mode, along with any config problems, which are reported but not
+/// fatal.
+fn load_config() -> (Keymap, WheelMode, Vec<String>) {
     let mut problems = Vec::new();
     let config = x360truewireless_common::config::Config::load().unwrap_or_else(|e| {
         problems.push(format!("{e}; using defaults"));
@@ -177,7 +200,8 @@ fn load_keymap() -> (Keymap, Vec<String>) {
     eprintln!("typing for keyboard layout {}", layout.name);
     let (table, errors) = x360truewireless_common::keymap::KeyTable::with_overrides(&config.keys);
     problems.extend(errors);
-    (Keymap::with_table(layout, table), problems)
+    let wheel_mode = config.wheel_mode.unwrap_or_default();
+    (Keymap::with_table(layout, table), wheel_mode, problems)
 }
 
 fn find_receiver() -> Result<Option<DeviceInfo>> {
@@ -268,7 +292,8 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                         {
                             eprintln!("slot {slot}: controller connected");
                             if force_wheel {
-                                controller = Some(new_controller(slot, Device::Wheel)?);
+                                controller =
+                                    Some(new_controller(slot, Device::Wheel, shared, &mut ep_out)?);
                             } else {
                                 // The link info usually brings the type first; ask in case.
                                 pending = Some(Instant::now() + DEVICE_TYPE_TIMEOUT);
@@ -291,7 +316,9 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                             shared.type_keys(&out.keys)?;
                         }
                         InPacket::Gamepad(state) => match controller.as_mut() {
-                            Some(Controller::Pad(pad)) => pad.emit(&state)?,
+                            Some(Controller::Pad(pad) | Controller::WheelPad(pad)) => {
+                                pad.emit(&state)?
+                            }
                             Some(Controller::Wheel(wheel, _)) => wheel.emit(&state)?,
                             None => {}
                         },
@@ -300,12 +327,13 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                                 shared.set_battery(slot, level);
                             }
                             if let (Some(device), Some(_)) = (device, pending) {
-                                controller = Some(new_controller(slot, device)?);
+                                controller =
+                                    Some(new_controller(slot, device, shared, &mut ep_out)?);
                                 pending = None;
                             }
                         }
                         InPacket::Device(device) if pending.is_some() => {
-                            controller = Some(new_controller(slot, device)?);
+                            controller = Some(new_controller(slot, device, shared, &mut ep_out)?);
                             pending = None;
                         }
                         InPacket::Battery(level) => shared.set_battery(slot, level),
@@ -349,8 +377,26 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
 
             if pending.is_some_and(|deadline| Instant::now() >= deadline) {
                 eprintln!("slot {slot}: no device type reported; treating it as a gamepad");
-                controller = Some(new_controller(slot, Device::Gamepad)?);
+                controller = Some(new_controller(slot, Device::Gamepad, shared, &mut ep_out)?);
                 pending = None;
+            }
+
+            // The wheel mode was changed: replace the wheel's virtual device.
+            let wanted = *shared.wheel_mode.read().unwrap();
+            if let Some(mode) = controller.as_ref().and_then(Controller::wheel_mode)
+                && mode != wanted
+            {
+                eprintln!("slot {slot}: switching the wheel to {wanted:?} mode");
+                if let Some(Controller::Wheel(_, encoder)) = controller.as_mut() {
+                    let mut packets = Vec::new();
+                    encoder.stop_all(&mut packets);
+                    for p in &packets {
+                        send(&mut ep_out, p)?;
+                    }
+                }
+                // Remove the old device before the new one appears.
+                controller = None;
+                controller = Some(new_controller(slot, Device::Wheel, shared, &mut ep_out)?);
             }
 
             match controller.as_mut() {
@@ -358,6 +404,13 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                     pad.tick(Instant::now())?;
                     if let Some((strong, weak)) = pad.poll_ff()? {
                         send(&mut ep_out, &out::rumble(strong, weak))?;
+                    }
+                }
+                Some(Controller::WheelPad(pad)) => {
+                    pad.tick(Instant::now())?;
+                    // The wheel's rumble bytes are swapped: the first drives the small motor.
+                    if let Some((strong, weak)) = pad.poll_ff()? {
+                        send(&mut ep_out, &out::rumble(weak, strong))?;
                     }
                 }
                 Some(Controller::Wheel(wheel, encoder)) => {
@@ -419,15 +472,31 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
 }
 
 /// The virtual device for what connected: a racing wheel for a wheel, a pad for the rest.
-fn new_controller(slot: u8, device: Device) -> Result<Controller> {
+/// Create the virtual device for a newly connected controller, or a wheel in the current
+/// wheel mode.
+fn new_controller(
+    slot: u8,
+    device: Device,
+    shared: &Shared,
+    ep_out: &mut Endpoint<Interrupt, Out>,
+) -> Result<Controller> {
     Ok(match device {
         Device::Wheel => {
-            // Read when the wheel connects, so a changed layout applies on the next connect.
-            let layout = x360truewireless_common::config::Config::load()
-                .ok()
-                .and_then(|c| c.wheel_layout)
-                .unwrap_or_default();
-            eprintln!("slot {slot}: racing wheel ({layout:?} layout)");
+            let mode = *shared.wheel_mode.read().unwrap();
+            eprintln!("slot {slot}: racing wheel ({mode:?} mode)");
+            let layout = match mode {
+                WheelMode::Wheel => WheelLayout::Gamepad,
+                WheelMode::Joystick => WheelLayout::Joystick,
+                WheelMode::Controller => {
+                    // No game forces in this mode: just the wheel's own autocentre.
+                    for p in wheel_ff::Encoder::autocentre_only() {
+                        send(ep_out, &p)?;
+                    }
+                    return Ok(Controller::WheelPad(
+                        Pad::new().context("create virtual pad")?,
+                    ));
+                }
+            };
             Controller::Wheel(
                 Wheel::new(layout).context("create virtual wheel")?,
                 wheel_ff::Encoder::new(),
