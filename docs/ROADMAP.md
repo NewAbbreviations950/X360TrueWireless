@@ -237,7 +237,10 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       means the TMX.
     - **SnowRunner works on Proton 6.3**, in both wheel modes: TMX mode with the game's
       Thrustmaster input and TX preset, or G920 mode with DirectInput and its "Logitech G923
-      Xbox layout" preset; both map right. Switching modes mid-game loses force feedback
+      Xbox layout" preset; both map right, with force feedback. (TMX mode with DirectInput
+      and the TX preset acts as if the left-paddle modifier is held, perhaps from the clutch
+      we report fully released at its maximum; not looked into, since the Thrustmaster input
+      works.) Switching modes mid-game loses force feedback
       (the game sets effects up on the wheel it found at launch). A switch also once killed
       slot 1's thread with EINVAL from a withdrawn force-feedback request; such requests are
       now skipped, and a failed slot restarts. Still to look at: SnowRunner forgets the
