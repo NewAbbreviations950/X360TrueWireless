@@ -318,6 +318,11 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   16-bit value (`ff 7f`, `01 80`, `00 7f`…) at bytes 2/4/6, for block controls `05`–`07` and
   durations `ff`/`00`; and device gain `0b 40`–`7f` (8 steps) × effect gain `ff`/`7f`/`40` ×
   three magnitudes × two durations, with the gain set in a step of its own.
+- Also none moved (2026-10-18 early morning): each device control `0b 00`–`3f` set before
+  a constant force (`08 01` + `ff 7f 00…` or `7f`×6) started with `0b 08 00 01`; and every
+  action byte `0b AA 00 01 00 00 00 00` and `0b AA 00 01 01 01 00 00` after the load. The
+  replies matched the slot map above: `c1` when the first slot's action is 2 or 3, `c2`/`c4`
+  for the second and third slots, combined (`c3`…`c7`) when several index bytes are `01`.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
