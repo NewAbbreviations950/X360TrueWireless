@@ -113,14 +113,17 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
     - Also ruled out: every motor mode (`00 00 0b 00`–`3f`) set before the effect is
       loaded; packets longer than 12 bytes (truncated); other header bytes 0/1.
     - Also ruled out: register writes in the unused header classes.
-    - Next (from the patent, see `docs/protocol.md`): `kk` = `0b` as the effect operation
-      with its index fields filled in (every earlier `0b` test left them zero), with and
-      without the native autocentre stopped; constant-force bytes at `40`/`c0` in case one
-      is a direction.
-    - Then movement tests on the accepted space: the `09` operation and loop fields, duration
-      and gain units, block control `05`/`06`/`07`, effect indices other than 1, other
-      effect types (a spring condition is easy to feel), and the ramp (`02`/`05`).
-    - Find what `0c` frees (the memory still fills) and what `0b` replies mean.
+    - **Found (2026-10-18 morning): constant force and spring work.** Create, parameter
+      block, envelope block (`03`, needed for constant/periodic), then start with
+      `0b 08 00 01` (stop `0b 04 00 01`). Constant block byte 2 is a signed force; duration
+      is in ~10 ms units (`00` = until stopped); gain scales; a new parameter block updates
+      the playing effect live. The spring block is `CP PC NC PS NS DB`. The autocentre
+      must be off (`0b 10`) for rightward forces to act. Details in `docs/protocol.md`.
+    - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
+      period), the envelope fields, damper/inertia/friction, the ramp (`02`/`05`), several
+      effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
+      and start delay/loops do.
+    - Find what `0c` frees (the memory still fills).
     - **Capture a real game instead (parked for now, brute force first).** On hand: an open
       RGH3 Xbox 360 (phat), a Raspberry Pi Pico and a racing game disc with force feedback.
       A forum pinout lists USB D+/D− on the front RF module next to its serial (LED/sync)

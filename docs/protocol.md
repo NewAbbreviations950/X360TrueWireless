@@ -359,10 +359,23 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   - **Live update:** sending a new constant block (`08 01 MM …`) while the effect plays
     changes the force at once, with no new start. `08 01 00 …` brings it to zero.
   - **Stop:** `0b 04 00 01` (action 1 on the first slot), device control `00 00 0b 03` (stop
-    all effects) and `0c 01` (free) all stop it. `0b 0c 00 01` (action 3) restarts it, and
-    `0b 01 00 01` and `09 01` don't stop it.
+    all effects) and `0c 01` (free) all stop it. `0b 0c 00 01` (action 3), `0b 01 00 01` and
+    `09 01` don't stop it.
   - With the autocentre off and the weight on, the rim stays at whichever lock it reaches, so
     stop tests need the autocentre on.
+  - **With the autocentre on, only leftward (negative) forces act:** `40` and `7f` didn't move
+    the rim from its rest point left of centre, `c0` and `80` drove it to the left lock. With
+    the autocentre off (`0b 10`) both directions work. A driver should switch the autocentre
+    off while host effects play (and back on, `0b 20`, when they stop).
+- **Spring condition** (`04 ii CP PC NC PS NS DB`, the patent's order): with the autocentre
+  off and the weight holding the rim left of centre, NC (byte 4) with NS (byte 6) pulled it
+  back to centre (`00 00 7f 00 7f 00`, or all of PC…NS at `7f`), while PC/PS alone or any single
+  byte did nothing. All six bytes at `7f` pulled the rim past centre to the right, so byte 2
+  is the centre-point offset. The spring needs only the create and this block, then the start.
+- **Periodic** (`07 ii …` + envelope): not mapped yet. Byte 2 alone does nothing; with byte 6
+  or 7 also set the rim gets pushed, but with the weight rig only the leftward half shows
+  (autocentre on) or the timing is irregular (off). Mapping magnitude/offset/phase/period is
+  better done by feel, with the weight off.
 - Autocentre off (`0b 10`), then the effects started (spring/damper/inertia/friction with
   condition blocks, the five periodic waves, constant force; starts `0b 08`, `0b 0c`, `09`, and
   `0b 08` + `0b 06` + `0b 01`): none pulled the rim off its stop. The device controls after
