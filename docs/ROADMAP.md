@@ -240,7 +240,14 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       feedback too, but no preset maps it: the game has no TMX preset, its TX preset acts
       as if the left-paddle modifier is held (Thrustmaster or DirectInput input), and T248
       (Xbox) gets the face buttons wrong. An earlier "TX works" was a controller's input.
-      So the G920 is the default again, and the TMX the second choice. Switching modes mid-game loses force feedback
+      So the G920 is the default again, and the TMX the second choice.
+    - **Wreckfest (Proton 11, G920 mode):** menus scrolled up-right after touching the
+      D-pad, and binding picked random controls. The D-pad itself was fine (evdev events
+      recorded, and Wine's joy.cpl showed it centring); the cause is the pedal axes, which
+      rest at their maximum like a real G920's: Wreckfest had menu navigation on them, and
+      Wine shows axes centred until the first report, so the first input looks like the
+      pedals moving. Pressing the pedals once, then rebinding menu navigation to the D-pad,
+      fixed it (real G920s hit the same). Force feedback in Wreckfest not checked yet. Switching modes mid-game loses force feedback
       (the game sets effects up on the wheel it found at launch). A switch also once killed
       slot 1's thread with EINVAL from a withdrawn force-feedback request; such requests are
       now skipped, and a failed slot restarts. Still to look at: SnowRunner forgets the

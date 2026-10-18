@@ -105,6 +105,11 @@ only at launch), and in the game's controls choose DirectInput with the "Logitec
 (Xbox)" layout. SnowRunner has no TMX preset, and its other Thrustmaster presets map the
 buttons wrong.
 
+In Wreckfest, menus may scroll by themselves and binding may pick the wrong control, because
+it reads the released pedals (which a G920 reports at the end of their travel) as held
+directions. Press each pedal once after starting the game, then in the controls unbind any
+menu navigation on the pedal axes and bind it to the D-pad again. Real G920s need the same.
+
 ## Configuration
 
 `~/.config/x360truewireless/config.toml` (optional):
