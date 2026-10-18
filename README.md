@@ -89,11 +89,13 @@ wheel, and right away, so switch before starting a game:
 - **Xbox controller**: an ordinary Xbox 360 controller, for games without wheel support.
   Steering is the left stick, and you get rumble and the wheel's own centring.
 
-For both wheel modes, turn Steam Input off for the game (its Properties, Controller,
-"Disable Steam Input"), or for all generic controllers in Steam's controller settings. With
+For both wheel modes, turn Steam Input off for generic controllers in Steam's controller
+settings. Steam counts the wheel as one, and your Xbox controllers stay on Steam Input. With
 it on, games get Steam's virtual pad as well as the wheel: it has no force feedback, and the
 pedals, which read fully one way when released, look like sticks held over to one side
-(stuck menu navigation in Wreckfest, for one). Your Xbox controllers stay on Steam Input.
+(stuck menu navigation in Wreckfest, for one). A game's own "Disable Steam Input" setting
+works too, but it turns Steam Input off for every controller in that game, Xbox ones
+included.
 
 Tested on the Steam Deck with DiRT 4, and SnowRunner. SnowRunner needs Proton 6.3 for force
 feedback (choose it under the game's Properties, Compatibility): Proton 7 and later reject the
