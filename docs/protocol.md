@@ -296,6 +296,16 @@ Reading the patent again (US 8,117,364) gives likely meanings for what's mapped 
   possible direction). The `0b` reply is `c0` when `AA & 3` = 0 and `df` otherwise, except
   `AA & 0c` ≠ 0 with all index bytes `ff`, which gives `c1`. So the reply does read the
   index bytes, but none of these combinations played the effect.
+- **Device control decoded in part** (2026-10-18): after each `00 00 0b 00`–`3f`, a load and
+  `0b 01`/`02`/`03 01 …`, the `0b` reply turned from `df` to `ff` (bit `20`) exactly when the
+  device control's low 3 bits were 5 (`05`, `0d`, `15` … `3d`). In the patent's order of
+  standard control values (0 no change, 1 enable motors, 2 disable motors, 3 stop effects,
+  4 reset device, 5 pause play list, 6 continue play list) 5 is "pause". That fits what was
+  already known: `0b 02` disables the motor and `0b 04` (reset, which "enables all motors")
+  turns it on. So the low 3 bits are the standard control, bits 3–5 hold the native control
+  (`10` stops the autocentre, `20` starts it), and bit `20` of the `0b` reply is "play list
+  paused". The reply never showed a start succeeding (`df` whenever `AA & 3` ≠ 0); the
+  other reply bits are still to be decoded.
 - `kk` = `0c` with no effect loaded answers status `6` for every value (`2` after a create),
   with the normal all-bytes checksum.
 
