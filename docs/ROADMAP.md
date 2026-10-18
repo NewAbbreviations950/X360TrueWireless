@@ -168,7 +168,10 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
       link info; up to four at once, one per slot), with `X360TRUEWIRELESS_WHEEL_SLOTS` as a
       manual override. Still to do: try `fftest` and a game (SnowRunner),
       and check which way games expect a positive force to turn the rim (it's one constant,
-      `CONSTANT_SIGN`; evdev direction `0x4000` currently pushes left).
+      `CONSTANT_SIGN`; evdev direction `0x4000` currently pushes left). In SnowRunner, steer
+      into a turn while driving: the rim should be pulled back towards centre; if it's pushed
+      further into the turn, flip the sign. `docs/probes/scripts/ff-test.py` checks the
+      driver side on its own.
     - Next, with the weight off and by feel: the periodic block (magnitude/offset/phase/
       period), the envelope fields, damper/inertia/friction strength, several effects at once (indices 2+, the `0b` slot bytes), and what block control `05`/`06`/`07`
       and start delay/loops do.

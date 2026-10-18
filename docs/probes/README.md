@@ -101,6 +101,8 @@ X360TRUEWIRELESS_FF_LOG=1 ~/.local/bin/x360truewireless-daemon
 - `evtest` should list "Microsoft Xbox 360 Wireless Racing Wheel" with steering on `ABS_X`,
   throttle on `ABS_Z` and brake on `ABS_RZ`.
 - `fftest /dev/input/eventN` should log one `ff Upload …` / `Play` / `Stop` per effect.
+- `scripts/ff-test.py` (python-evdev) plays constant forces both ways, a timed one and a
+  spring through the virtual wheel, and prints the steering, so it shows the whole path.
 - `protontricks 1465360 joy.cpl` (SnowRunner's prefix) should show the wheel, and its force
   feedback test should produce log lines.
 - In SnowRunner, the log shows which effects the game really uses. Those are the ones the
