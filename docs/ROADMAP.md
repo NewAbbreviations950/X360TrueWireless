@@ -87,6 +87,31 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
   them. A compose/Unicode fallback could cover the rest.
 - **Packaging extras:** aarch64 builds, AUR/OBS packages, maybe a Flatpak for the GUI only.
 - **Power off controller** from the tray or popup (`00 00 08 c0`); needs a D-Bus method.
+- **Windows port** (the user has a Windows laptop to test on). The packet parsing
+  (`proto`), the force-feedback encoder (`wheel_ff`), the keymap and the config are
+  portable, and `nusb` runs on Windows over WinUSB. Steps, in order:
+  1. **Split out the Linux-only parts** behind a common layer: virtual devices (uinput),
+     chatpad keyboard output (xkbcommon layouts), the receiver handover (`xpad`), and the
+     tray↔daemon link (D-Bus). This changes nothing on Linux.
+  2. **First milestone, a plain `.exe` run by hand:** take the receiver over through WinUSB
+     (switched with Zadig at first), virtual Xbox pads through ViGEmBus (signed, no longer
+     maintained but working; Rust client available), and chatpad typing with `SendInput`
+     (Unicode, so no layout handling).
+  3. **Racing wheel:** a virtual DirectInput joystick with force feedback through vJoy
+     (signed, passes games' effects to the program), mapped onto `ffb::Op` and the existing
+     encoder. A virtual force-feedback device of our own would need a kernel driver and paid
+     signing, so it's out. Check vJoy's force-feedback support with a few games, since it
+     differs between versions.
+  4. **Tray and settings:** egui already runs on Windows; the tray icon needs a Windows
+     library, and the link to the daemon becomes a named pipe (or one process).
+  5. **`X360TrueWireless-Setup.exe`** (Inno Setup or WiX), built by the release workflow on a
+     Windows runner next to the Linux download. It installs the app, autostart and an
+     uninstaller, assigns WinUSB to the receiver (one admin prompt; the driver package needs a
+     locally created certificate like Zadig's, or a paid one), and installs ViGEmBus and vJoy.
+     Without a code-signing certificate, SmartScreen warns about the setup at first. Later:
+     winget.
+  - Swapping the receiver to WinUSB turns off Windows' own Xbox support for it, so the
+    program has to cover everything, as it does on Linux.
 - **Racing wheel force feedback** (Xbox 360 Wireless Racing Wheel, WRW01). Games' effects
   are passed to the wheel through the receiver.
   - Done: a `p` probe command in `x360truewireless-dump` with sweep scripts (`docs/probes/`).
