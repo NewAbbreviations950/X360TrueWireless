@@ -3595,7 +3595,7 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "x360truewireless-common"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "evdev",
  "serde",
@@ -3605,7 +3605,7 @@ dependencies = [
 
 [[package]]
 name = "x360truewireless-daemon"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "ctrlc",
@@ -3622,11 +3622,11 @@ dependencies = [
 
 [[package]]
 name = "x360truewireless-proto"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "x360truewireless-tray"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "eframe",

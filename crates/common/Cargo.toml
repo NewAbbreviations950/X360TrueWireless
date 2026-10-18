@@ -1,10 +1,10 @@
 [package]
 name = "x360truewireless-common"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
 evdev = "0.13.2"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"
-x360truewireless-proto = { version = "0.1.0", path = "../proto" }
+x360truewireless-proto = { version = "0.2.0", path = "../proto" }
