@@ -13,6 +13,8 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
   (Guide+A), People = Meta.
 - `install.sh` (release download / `--local` / `--uninstall`), systemd user unit, udev
   rule, and CI + release workflows.
+- Renamed to X360TrueWireless and released as v0.2.0 (2026-10-20), after pre-releases
+  rc1–rc9 were tested on this machine and the Steam Deck.
 - People opens Steam friends & chat (`steam://open/friends`).
 - Quick Access sends Guide, then A 80 ms later, so Steam doesn't also register a stray A.
 - Caps light synced with the system Caps Lock via an `LED_CAPSL` on the virtual keyboard.
@@ -39,15 +41,6 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 
 
 ## Next
-- **Publish the rename:** the repo is `NewAbbreviations950/X360ChatDriver` (releases up to
-  v0.1.1, under the old names). Rename it to `X360TrueWireless` (GitHub redirects the old
-  links), then push `dev`, merge into `main` and tag v0.2.0 together: the new installer
-  downloads `x360truewireless-x86_64-linux.tar.gz` from the latest release, which v0.1.1
-  doesn't have. Before that, test on the Steam Deck (which has the old install) with a
-  pre-release: tag `v0.2.0-rc1` on `dev` (tags with a `-` are published as pre-releases,
-  which "latest" skips) and run
-  `curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireless/dev/install.sh | X360TRUEWIRELESS_VERSION=v0.2.0-rc1 bash`.
-  Check that it replaces the old install and keeps the settings, then try SnowRunner.
 - **Test on Steam Deck** (desktop + game mode) and **Kubuntu**:
   - Steam sees exactly one pad per controller.
   - Chatpad types in game mode.
