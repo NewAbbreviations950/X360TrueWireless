@@ -239,7 +239,7 @@ impl KdeColors {
 }
 
 fn kde_colors() -> Option<KdeColors> {
-    let path = x360chatpad_common::config::config_dir()?.join("kdeglobals");
+    let path = x360truewireless_common::config::config_dir()?.join("kdeglobals");
     let text = std::fs::read_to_string(path).ok()?;
     let mut section = String::new();
     let mut entries = Vec::new();

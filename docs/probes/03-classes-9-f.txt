@@ -1,0 +1,6 @@
+# Family 1: header-only commands in classes 9-b, d-f. Class c (the chatpad) is skipped.
+# About 8 minutes.
+say class 9-b
+00 00 {09..0b} {00..ff}
+say class d-f
+00 00 {0d..0f} {00..ff}

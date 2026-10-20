@@ -1,0 +1,13 @@
+# Phase 0: does the known rumble packet reach the wheel, and does it drive the rumble
+# motors or the steering motor? Watch and listen; each level plays for 2 s.
+settle 2000
+say rumble strong (left) motor 25%
+00 01 0f c0 00 40 00
+say rumble weak (right) motor 25%
+00 01 0f c0 00 00 40
+say both 50%
+00 01 0f c0 00 80 80
+say both 100%
+00 01 0f c0 00 ff ff
+say off
+00 01 0f c0 00 00 00

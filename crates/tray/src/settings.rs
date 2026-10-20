@@ -1,16 +1,19 @@
-//! The settings popup: driver status, keyboard layout, and key remapping.
+//! The settings popup: a box per connected controller slot (with the wheel mode and a way into
+//! the chatpad key remapper), and a settings page for the keyboard layout and the driver.
 //!
 //! It's a borderless window that closes when it loses focus, like a tray popup. (On Wayland an
-//! app can't place itself next to the tray, so the compositor decides where it appears.)
-//! Changes are saved and applied as soon as they're made.
+//! app can't place itself next to the tray, so the compositor decides where it appears.) It
+//! resizes to fit what it shows. Changes are saved and applied as soon as they're made.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, Sense, Stroke, Vec2};
-use x360chatpad_common::ChatpadKey;
-use x360chatpad_common::config::Config;
-use x360chatpad_common::keymap::{KeyTable, Layer, Output};
+use x360truewireless_common::config::{Config, WheelMode};
+use x360truewireless_common::dbus::SlotDevice;
+use x360truewireless_common::keymap::{KeyTable, Layer, Output};
+use x360truewireless_common::{Battery, ChatpadKey};
 
 use crate::client::{self, Client, Status};
 use crate::placement::{self, Anchor};
@@ -30,6 +33,34 @@ const ROWS: &[&[ChatpadKey]] = {
 
 const KEY: Vec2 = Vec2::new(54.0, 50.0);
 const GAP: f32 = 6.0;
+/// One controller slot's box on the main page.
+const BOX: Vec2 = Vec2::new(172.0, 200.0);
+const BOX_GAP: f32 = 12.0;
+const MARGIN: f32 = 20.0;
+const HEADER: f32 = 28.0;
+
+/// The wheel modes offered, with their labels and explanations.
+const WHEEL_MODES: &[(WheelMode, &str, &str)] = &[
+    (
+        WheelMode::Logitech,
+        "Logitech G920",
+        "A force-feedback wheel that games see as a Logitech G920, so games with a G920 \
+         profile set up its buttons and pedals themselves. Turn Steam Input off for generic \
+         controllers so games see the wheel itself.",
+    ),
+    (
+        WheelMode::Thrustmaster,
+        "Thrustmaster TMX",
+        "The same wheel shown as a Thrustmaster TMX, for games with a TMX profile but none \
+         for the G920.",
+    ),
+    (
+        WheelMode::Controller,
+        "Xbox controller",
+        "An Xbox 360 controller, for games without wheel support: steering on the left \
+         stick, with rumble and the wheel's own centring.",
+    ),
+];
 
 /// Non-character keys offered in the picker.
 const SPECIAL_KEYS: &[(&str, &str)] = &[
@@ -68,21 +99,73 @@ const SPECIAL_KEYS: &[(&str, &str)] = &[
     ("Mute", "KEY_MUTE"),
 ];
 
-const APP_ID: &str = "x360chatpad";
+const APP_ID: &str = "x360truewireless";
+
+/// Top-down pictures of a controller, without and with its chatpad, traced from photos taken
+/// straight down on one (the outline averaged with its mirror image; buttons and keys measured
+/// on the photos). Drawn in two colours, swapped for the theme's at runtime.
+const CONTROLLER_SVG: &str = include_str!("icons/controller.svg");
+const CHATPAD_SVG: &str = include_str!("icons/chatpad.svg");
+/// The racing wheel front on, measured the same way on a photo of one.
+const WHEEL_SVG: &str = include_str!("icons/wheel.svg");
+const SVG_BODY: &str = "#b0b0b0";
+const SVG_DETAIL: &str = "#303030";
+/// How wide the pictures are in the popup; their height follows from their shape. The wheel
+/// is round, so it's narrower to stay as tall as the controllers.
+const ICON_WIDTH: f32 = 78.0;
+const WHEEL_WIDTH: f32 = 66.0;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Page {
+    /// The connected slots.
+    Slots,
+    /// The chatpad key remapper.
+    Keys,
+    /// App-wide settings, behind the gear button.
+    Settings,
+}
+
+/// The window size for `page`, with `slots` slots connected.
+fn page_size(page: Page, slots: usize) -> Vec2 {
+    match page {
+        Page::Slots => {
+            let n = slots.max(1) as f32;
+            let boxes = n * BOX.x + (n - 1.0) * BOX_GAP;
+            egui::vec2(
+                boxes.max(360.0) + 2.0 * MARGIN,
+                2.0 * MARGIN + HEADER + 30.0 + BOX.y,
+            )
+        }
+        Page::Keys => egui::vec2(10.0 * KEY.x + 9.0 * GAP + 2.0 * MARGIN, 490.0),
+        Page::Settings => egui::vec2(480.0, 250.0),
+    }
+}
+
+fn occupied(status: &Status) -> Vec<(usize, SlotDevice, Option<Battery>)> {
+    let Some(s) = &status.running else {
+        return Vec::new();
+    };
+    (s.devices.iter().enumerate())
+        .filter(|(_, d)| **d != SlotDevice::Empty)
+        .map(|(slot, &d)| (slot, d, s.battery.get(slot).copied().flatten()))
+        .collect()
+}
 
 pub fn run(anchor: Option<Anchor>) -> anyhow::Result<()> {
-    let size = [10.0 * KEY.x + 9.0 * GAP + 2.0 * 20.0, 540.0];
+    let status = Client::new().status();
+    let size = page_size(Page::Slots, occupied(&status).len());
+    let size = [size.x, size.y];
     let mut viewport = egui::ViewportBuilder::default()
-        .with_title("X360 Chatpad")
+        .with_title("X360TrueWireless")
         .with_app_id(APP_ID)
         .with_decorations(false)
         .with_transparent(true)
         .with_resizable(false)
         .with_inner_size(size);
+    // KWin keeps the popup next to the tray as it resizes, for as long as the script is loaded.
+    let mut _placement = None;
     if placement::is_kde_wayland() {
-        if let Some(script) = placement::kwin_place(APP_ID, anchor, size) {
-            script.remove_later(Duration::from_secs(3));
-        }
+        _placement = placement::kwin_place(APP_ID, anchor, size);
     } else if let Some(pos) = placement::x11_position(anchor, size) {
         viewport = viewport.with_position(pos);
     }
@@ -91,15 +174,21 @@ pub fn run(anchor: Option<Anchor>) -> anyhow::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "X360 Chatpad",
+        "X360TrueWireless",
         options,
-        Box::new(|cc| Ok(Box::new(Settings::new(&cc.egui_ctx)))),
+        Box::new(move |cc| Ok(Box::new(Settings::new(&cc.egui_ctx, status, anchor)))),
     )
     .map_err(|e| anyhow::anyhow!("opening the settings window: {e}"))
 }
 
 struct Settings {
     palette: Palette,
+    page: Page,
+    /// The window size being asked for, how many times, and when last.
+    resize: (Vec2, u8, Instant),
+    anchor: Option<Anchor>,
+    /// Rendered device pictures, by (device, dimmed).
+    icons: HashMap<(SlotDevice, bool), egui::TextureHandle>,
     config: Config,
     load_error: Option<String>,
     layer: Layer,
@@ -116,7 +205,7 @@ struct Settings {
 }
 
 impl Settings {
-    fn new(ctx: &egui::Context) -> Self {
+    fn new(ctx: &egui::Context, first: Status, anchor: Option<Anchor>) -> Self {
         let palette = Palette::detect();
         crate::theme::load_system_font(ctx);
         palette.apply(ctx);
@@ -128,6 +217,7 @@ impl Settings {
         let repaint = ctx.clone();
         let status =
             client::watch_status(Duration::from_secs(1), move |_| repaint.request_repaint());
+        *status.lock().unwrap() = first;
         let picked = Arc::new(Mutex::new(None));
         {
             let picked = picked.clone();
@@ -144,6 +234,10 @@ impl Settings {
         };
         Settings {
             palette,
+            page: Page::Slots,
+            resize: (Vec2::ZERO, 0, Instant::now()),
+            anchor,
+            icons: HashMap::new(),
             config,
             load_error,
             layer: Layer::Normal,
@@ -212,32 +306,221 @@ impl Settings {
 
     fn header_ui(&mut self, ui: &mut egui::Ui) {
         let p = self.palette.clone();
-        let status = self.status.lock().unwrap().clone();
+        let running = self.status.lock().unwrap().running.is_some();
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("X360 Chatpad").size(18.0).strong());
-            ui.add_space(8.0);
-            let (dot, text) = match &status.running {
-                None => (p.warn, "Driver not running".to_owned()),
-                Some(s) => {
-                    let players: Vec<String> = s
-                        .connected
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, c)| **c)
-                        .map(|(i, _)| (i + 1).to_string())
-                        .collect();
-                    match players.len() {
-                        0 => (p.weak_text, "No controller connected".to_owned()),
-                        1 => (p.green, format!("Player {} connected", players[0])),
-                        _ => (p.green, format!("Players {} connected", players.join(", "))),
-                    }
+            ui.set_min_height(HEADER);
+            if self.page != Page::Slots {
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), Sense::hover());
+                if back_button(ui, rect, &p).clicked() {
+                    self.page = Page::Slots;
                 }
+            }
+            let title = match self.page {
+                Page::Slots => "X360TrueWireless",
+                Page::Keys => "Chatpad keys",
+                Page::Settings => "Settings",
             };
-            pill(ui, &p, dot, &text);
-            if status.running.is_none() && ui.button("Start driver").clicked() {
-                crate::tray::restart_driver();
+            ui.label(egui::RichText::new(title).size(18.0).strong());
+            if !running {
+                ui.add_space(8.0);
+                pill(ui, &p, p.warn, "Driver not running");
+            }
+            if let Some((ok, msg)) = &self.message {
+                ui.add_space(8.0);
+                ui.label(
+                    egui::RichText::new(msg)
+                        .color(if *ok { p.weak_text } else { p.warn })
+                        .small(),
+                );
             }
         });
+    }
+
+    /// The picture of a device (a wheel, a controller with a chatpad, or else a plain
+    /// controller), dimmed for one still connecting.
+    fn icon(&mut self, ctx: &egui::Context, device: SlotDevice, dim: bool) -> egui::TextureHandle {
+        let p = &self.palette;
+        let scale = ctx.pixels_per_point();
+        self.icons
+            .entry((device, dim))
+            .or_insert_with(|| {
+                let body = mix(p.button, p.text, if dim { 0.25 } else { 0.6 });
+                let detail = mix(p.window, p.button, 0.5);
+                let (svg, width) = match device {
+                    SlotDevice::Wheel => (WHEEL_SVG, WHEEL_WIDTH),
+                    SlotDevice::Chatpad => (CHATPAD_SVG, ICON_WIDTH),
+                    _ => (CONTROLLER_SVG, ICON_WIDTH),
+                };
+                let image = render_svg(svg, body, detail, width * scale);
+                ctx.load_texture(
+                    format!("device-{device:?}-{dim}"),
+                    image,
+                    egui::TextureOptions::LINEAR,
+                )
+            })
+            .clone()
+    }
+
+    fn slots_ui(&mut self, ui: &mut egui::Ui) {
+        let p = self.palette.clone();
+        let status = self.status.lock().unwrap().clone();
+        if status.running.is_none() {
+            ui.vertical_centered(|ui| {
+                ui.add_space(36.0);
+                ui.label("The driver isn't running, so controllers aren't set up.");
+                ui.add_space(8.0);
+                if ui.button("Start driver").clicked() {
+                    crate::tray::restart_driver();
+                }
+            });
+            return;
+        }
+        let slots = occupied(&status);
+        if slots.is_empty() {
+            let (rect, _) =
+                ui.allocate_exact_size(egui::vec2(ui.available_width(), BOX.y), Sense::hover());
+            let painter = ui.painter();
+            painter.rect(
+                rect,
+                CornerRadius::same(12),
+                Color32::TRANSPARENT,
+                Stroke::new(1.0, mix(p.window, p.text, 0.2)),
+                egui::StrokeKind::Inside,
+            );
+            let icon = self.icon(ui.ctx(), SlotDevice::Controller, true);
+            paint_icon(ui.painter(), &icon, rect.center() - egui::vec2(0.0, 30.0));
+            let painter = ui.painter();
+            painter.text(
+                rect.center() + egui::vec2(0.0, 20.0),
+                Align2::CENTER_CENTER,
+                "No controllers connected",
+                FontId::proportional(14.0),
+                p.text,
+            );
+            painter.text(
+                rect.center() + egui::vec2(0.0, 42.0),
+                Align2::CENTER_CENTER,
+                "Press the Guide button on a controller or wheel",
+                FontId::proportional(12.0),
+                p.weak_text,
+            );
+            return;
+        }
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = BOX_GAP;
+            let n = slots.len() as f32;
+            let width = n * BOX.x + (n - 1.0) * BOX_GAP;
+            let spare = (ui.available_width() - width) / 2.0 - BOX_GAP;
+            if spare > 0.0 {
+                ui.add_space(spare);
+            }
+            for (slot, device, battery) in slots {
+                self.slot_box(ui, slot, device, battery);
+            }
+        });
+    }
+
+    /// One slot: what's connected, its battery, and what can be set for it.
+    fn slot_box(
+        &mut self,
+        ui: &mut egui::Ui,
+        slot: usize,
+        device: SlotDevice,
+        battery: Option<Battery>,
+    ) {
+        let p = self.palette.clone();
+        let (rect, _) = ui.allocate_exact_size(BOX, Sense::hover());
+        // Widgets go in a child, so placing them doesn't move the row's cursor.
+        let ui = &mut ui.new_child(egui::UiBuilder::new().max_rect(rect));
+        let inner = rect.shrink(12.0);
+        let painter = ui.painter().clone();
+        painter.rect(
+            rect,
+            CornerRadius::same(12),
+            p.button.gamma_multiply(0.55),
+            Stroke::new(1.0, mix(p.window, p.text, 0.12)),
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            inner.left_top(),
+            Align2::LEFT_TOP,
+            format!("Slot {}", slot + 1),
+            FontId::proportional(14.0),
+            p.text,
+        );
+        let connecting = device == SlotDevice::Connecting;
+        let centre = egui::pos2(inner.center().x, inner.top() + 56.0);
+        let icon = self.icon(ui.ctx(), device, connecting);
+        paint_icon(&painter, &icon, centre);
+        let name = match device {
+            SlotDevice::Connecting => "Connecting…",
+            SlotDevice::Chatpad => "Controller + chatpad",
+            SlotDevice::Wheel => "Racing wheel",
+            _ => "Controller",
+        };
+        painter.text(
+            egui::pos2(inner.center().x, inner.top() + 102.0),
+            Align2::CENTER_CENTER,
+            name,
+            FontId::proportional(13.0),
+            if connecting { p.weak_text } else { p.text },
+        );
+
+        let action = Rect::from_min_size(
+            egui::pos2(inner.left(), inner.top() + 118.0),
+            egui::vec2(inner.width(), 28.0),
+        );
+        match device {
+            SlotDevice::Chatpad => {
+                let button = egui::Button::new("Remap keys").corner_radius(CornerRadius::same(14));
+                if ui
+                    .put(action, button)
+                    .on_hover_text("Change what the chatpad's keys type (on every chatpad)")
+                    .clicked()
+                {
+                    self.page = Page::Keys;
+                }
+            }
+            SlotDevice::Wheel => {
+                let current = self.config.wheel_mode.unwrap_or_default();
+                let label = (WHEEL_MODES.iter())
+                    .find(|(m, ..)| *m == current)
+                    .map_or("", |(_, label, _)| label);
+                let mut chosen = None;
+                ui.scope_builder(egui::UiBuilder::new().max_rect(action), |ui| {
+                    egui::ComboBox::from_id_salt(("wheel", slot))
+                        .width(action.width())
+                        .selected_text(label)
+                        .show_ui(ui, |ui| {
+                            for &(mode, label, tip) in WHEEL_MODES {
+                                if ui
+                                    .selectable_label(mode == current, label)
+                                    .on_hover_text(tip)
+                                    .clicked()
+                                    && mode != current
+                                {
+                                    chosen = Some(mode);
+                                }
+                            }
+                        })
+                        .response
+                        .on_hover_text("How games see the wheel. Switch before starting a game.");
+                });
+                if let Some(mode) = chosen {
+                    self.config.wheel_mode = (mode != WheelMode::default()).then_some(mode);
+                    self.save();
+                }
+            }
+            _ => {}
+        }
+
+        if let Some(level) = battery {
+            let size = battery_size();
+            let bars = Rect::from_min_size(inner.right_bottom() - size, size);
+            ui.scope_builder(egui::UiBuilder::new().max_rect(bars), |ui| {
+                battery_bars(ui, &p, level, &format!("Battery {}", level.name()));
+            });
+        }
     }
 
     fn layer_tabs(&mut self, ui: &mut egui::Ui) {
@@ -442,7 +725,26 @@ impl Settings {
         }
     }
 
-    fn footer_ui(&mut self, ui: &mut egui::Ui) {
+    fn keys_footer_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("The same keys apply to every chatpad.")
+                    .color(self.palette.weak_text)
+                    .small(),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Reset all keys").clicked() && !self.config.keys.is_empty() {
+                    self.config.keys.clear();
+                    if let Some(key) = self.selected {
+                        self.select(key, self.layer);
+                    }
+                    self.save();
+                }
+            });
+        });
+    }
+
+    fn settings_ui(&mut self, ui: &mut egui::Ui) {
         let p = self.palette.clone();
         let status = self.status.lock().unwrap().clone();
         ui.horizontal(|ui| {
@@ -490,22 +792,38 @@ impl Settings {
                     self.apply_layout_edit();
                 }
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("Reset all keys").clicked() && !self.config.keys.is_empty() {
-                    self.config.keys.clear();
-                    if let Some(key) = self.selected {
-                        self.select(key, self.layer);
-                    }
-                    self.save();
-                }
-                if let Some((ok, msg)) = &self.message {
-                    ui.colored_label(if *ok { p.weak_text } else { p.warn }, msg);
-                }
-            });
         });
-        if let Some(e) = &self.load_error {
-            ui.colored_label(p.warn, format!("Config problem: {e}"));
-        }
+        ui.label(
+            egui::RichText::new(
+                "Chatpads type through this layout. Steam Deck game mode uses a US layout \
+                 whatever the desktop's is, so set yours here if it differs.",
+            )
+            .color(p.weak_text)
+            .small(),
+        );
+        ui.add_space(14.0);
+        ui.horizontal(|ui| {
+            ui.label("Driver");
+            let (dot, text) = match status.running {
+                Some(_) => (p.green, "Running"),
+                None => (p.warn, "Not running"),
+            };
+            pill(ui, &p, dot, text);
+            let label = if status.running.is_some() {
+                "Restart driver"
+            } else {
+                "Start driver"
+            };
+            if ui.button(label).clicked() {
+                crate::tray::restart_driver();
+            }
+        });
+        ui.add_space(14.0);
+        ui.label(
+            egui::RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION")))
+                .color(p.weak_text)
+                .small(),
+        );
     }
 
     /// Parse "layout" or "layout(variant)" from the layout field and save it.
@@ -549,7 +867,7 @@ impl eframe::App for Settings {
         // A key pressed on the chatpad selects it. Drop text focus so the character the
         // chatpad also types doesn't land in a text field.
         let picked = self.picked.lock().unwrap().take();
-        if let Some(key) = picked {
+        if let Some(key) = picked.filter(|_| self.page == Page::Keys) {
             ui.memory_mut(|m| {
                 if let Some(id) = m.focused() {
                     m.surrender_focus(id);
@@ -563,12 +881,38 @@ impl eframe::App for Settings {
             self.select(key, layer);
         }
 
+        // Fit the window to the page. A request made before the window is on screen gets
+        // lost, so keep asking (a few times) until the size matches.
+        let slots = occupied(&self.status.lock().unwrap()).len();
+        let size = page_size(self.page, slots);
+        let actual = ui.ctx().content_rect().size();
+        if (actual - size).abs().max_elem() > 1.0 {
+            let (wanted, tries, at) = &mut self.resize;
+            if *wanted != size {
+                (*wanted, *tries) = (size, 0);
+            }
+            if *tries < 8 && at.elapsed() >= Duration::from_millis(200) {
+                *tries += 1;
+                *at = Instant::now();
+                // A fixed-size window: some compositors go by its size limits.
+                ui.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(size));
+                ui.send_viewport_cmd(egui::ViewportCommand::MaxInnerSize(size));
+                ui.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+                if !placement::is_wayland()
+                    && let Some(pos) = placement::x11_position(self.anchor, [size.x, size.y])
+                {
+                    ui.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos.into()));
+                }
+            }
+            ui.ctx().request_repaint_after(Duration::from_millis(200));
+        }
+
         let p = self.palette.clone();
         let frame = egui::Frame::new()
             .fill(p.window)
             .corner_radius(CornerRadius::same(14))
             .stroke(Stroke::new(1.0, mix(p.window, p.text, 0.14)))
-            .inner_margin(egui::Margin::same(20));
+            .inner_margin(egui::Margin::same(MARGIN as i8));
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| {
@@ -582,24 +926,42 @@ impl eframe::App for Settings {
                     {
                         ui.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
-                    // Added after the drag area so it gets the clicks.
-                    let close = egui::Rect::from_min_size(
-                        egui::pos2(ui.max_rect().right() - 28.0, header.rect.center().y - 14.0),
-                        egui::vec2(28.0, 28.0),
-                    );
+                    // Added after the drag area so they get the clicks.
+                    let right = ui.max_rect().right();
+                    let y = header.rect.center().y - 14.0;
+                    let close = Rect::from_min_size(egui::pos2(right - 28.0, y), Vec2::splat(28.0));
                     if close_button(ui, close, &p).clicked() {
                         ui.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
-                    ui.add_space(6.0);
-                    self.layer_tabs(ui);
-                    ui.add_space(4.0);
-                    self.keyboard_ui(ui);
-                    ui.add_space(6.0);
-                    self.editor_ui(ui);
-                    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-                        self.footer_ui(ui);
-                        ui.separator();
-                    });
+                    let gear = Rect::from_min_size(egui::pos2(right - 62.0, y), Vec2::splat(28.0));
+                    if gear_button(ui, gear, &p, self.page == Page::Settings).clicked() {
+                        self.page = if self.page == Page::Settings {
+                            Page::Slots
+                        } else {
+                            Page::Settings
+                        };
+                    }
+                    ui.add_space(14.0);
+                    match self.page {
+                        Page::Slots => self.slots_ui(ui),
+                        Page::Keys => {
+                            self.layer_tabs(ui);
+                            ui.add_space(4.0);
+                            self.keyboard_ui(ui);
+                            ui.add_space(6.0);
+                            self.editor_ui(ui);
+                            ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                                self.keys_footer_ui(ui);
+                                ui.separator();
+                            });
+                        }
+                        Page::Settings => self.settings_ui(ui),
+                    }
+                    if let Some(e) = &self.load_error {
+                        ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+                            ui.colored_label(p.warn, format!("Config problem: {e}"));
+                        });
+                    }
                 });
             });
     }
@@ -621,6 +983,28 @@ fn pill(ui: &mut egui::Ui, p: &Palette, dot: Color32, text: &str) {
     );
 }
 
+const SEGMENT: Vec2 = Vec2::new(5.0, 12.0);
+const SEGMENT_GAP: f32 = 2.0;
+
+fn battery_size() -> Vec2 {
+    Vec2::new(4.0 * SEGMENT.x + 3.0 * SEGMENT_GAP, SEGMENT.y)
+}
+
+/// Four battery segments, filled up to the level. Green when healthy, warn colour when low.
+fn battery_bars(ui: &mut egui::Ui, p: &Palette, level: Battery, tip: &str) {
+    let (rect, response) = ui.allocate_exact_size(battery_size(), Sense::hover());
+    response.on_hover_text(tip);
+    let fill = if level.is_low() { p.warn } else { p.green };
+    let empty = mix(p.button, p.weak_text, 0.5);
+    for i in 0..4u8 {
+        let x = rect.left() + i as f32 * (SEGMENT.x + SEGMENT_GAP);
+        let segment = Rect::from_min_size(egui::pos2(x, rect.top()), SEGMENT);
+        let color = if i < level.bars() { fill } else { empty };
+        ui.painter()
+            .rect_filled(segment, CornerRadius::same(1), color);
+    }
+}
+
 fn close_button(ui: &mut egui::Ui, rect: Rect, p: &Palette) -> egui::Response {
     let response = ui.interact(rect, ui.id().with("close"), Sense::click());
     let painter = ui.painter();
@@ -633,6 +1017,89 @@ fn close_button(ui: &mut egui::Ui, rect: Rect, p: &Palette) -> egui::Response {
     painter.line_segment([c + egui::vec2(-r, -r), c + egui::vec2(r, r)], stroke);
     painter.line_segment([c + egui::vec2(r, -r), c + egui::vec2(-r, r)], stroke);
     response.on_hover_text("Close (Esc)")
+}
+
+fn back_button(ui: &mut egui::Ui, rect: Rect, p: &Palette) -> egui::Response {
+    let response = ui.interact(rect, ui.id().with("back"), Sense::click());
+    let painter = ui.painter();
+    if response.hovered() {
+        painter.circle_filled(rect.center(), 14.0, p.button);
+    }
+    let c = rect.center() + egui::vec2(-1.5, 0.0);
+    let stroke = Stroke::new(1.8, p.weak_text);
+    painter.line_segment(
+        [c + egui::vec2(4.0, -6.0), c + egui::vec2(-2.0, 0.0)],
+        stroke,
+    );
+    painter.line_segment(
+        [c + egui::vec2(-2.0, 0.0), c + egui::vec2(4.0, 6.0)],
+        stroke,
+    );
+    response.on_hover_text("Back")
+}
+
+fn gear_button(ui: &mut egui::Ui, rect: Rect, p: &Palette, on: bool) -> egui::Response {
+    let response = ui.interact(rect, ui.id().with("gear"), Sense::click());
+    let painter = ui.painter();
+    if on || response.hovered() {
+        painter.circle_filled(rect.center(), 14.0, p.button);
+    }
+    let c = rect.center();
+    let color = if on { p.text } else { p.weak_text };
+    for i in 0..8 {
+        let angle = i as f32 * std::f32::consts::TAU / 8.0;
+        let dir = egui::vec2(angle.cos(), angle.sin());
+        painter.line_segment([c + dir * 5.0, c + dir * 8.5], Stroke::new(2.6, color));
+    }
+    painter.circle_stroke(c, 5.0, Stroke::new(2.2, color));
+    response.on_hover_text("Settings")
+}
+
+/// Draw a device picture centred on `c`, at the size it was rendered for.
+fn paint_icon(painter: &egui::Painter, icon: &egui::TextureHandle, c: egui::Pos2) {
+    let size = icon.size_vec2() / painter.ctx().pixels_per_point();
+    painter.image(
+        icon.id(),
+        Rect::from_center_size(c, size),
+        Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+        Color32::WHITE,
+    );
+}
+
+/// Render one of our two-colour SVGs `width` pixels wide, in `body` and `detail`.
+fn render_svg(svg: &str, body: Color32, detail: Color32, width: f32) -> egui::ColorImage {
+    use resvg::{tiny_skia, usvg};
+    let hex = |c: Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+    let svg = svg
+        .replace(SVG_BODY, &hex(body))
+        .replace(SVG_DETAIL, &hex(detail));
+    let Ok(tree) = usvg::Tree::from_str(&svg, &usvg::Options::default()) else {
+        return egui::ColorImage::new([1, 1], vec![Color32::TRANSPARENT]);
+    };
+    let scale = width / tree.size().width();
+    let [w, h] = [
+        width.round() as u32,
+        (tree.size().height() * scale).round() as u32,
+    ];
+    let blank = || {
+        egui::ColorImage::new(
+            [w as usize, h as usize],
+            vec![Color32::TRANSPARENT; (w * h) as usize],
+        )
+    };
+    let Some(mut pixmap) = tiny_skia::Pixmap::new(w, h) else {
+        return blank();
+    };
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    // tiny-skia's pixels are premultiplied, like egui's.
+    let pixels = (pixmap.pixels().iter())
+        .map(|px| Color32::from_rgba_premultiplied(px.red(), px.green(), px.blue(), px.alpha()))
+        .collect();
+    egui::ColorImage::new([w as usize, h as usize], pixels)
 }
 
 fn key_width(key: ChatpadKey) -> f32 {

@@ -14,16 +14,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup toolchain install stable --profile minimal
-      - run: cargo build --release --locked -p x360chatpad-daemon -p x360chatpad-tray
+      - run: cargo build --release --locked -p x360truewireless-daemon -p x360truewireless-tray
       - name: Package
         run: |
-          dir=x360chatpad-x86_64-linux
+          dir=x360truewireless-x86_64-linux
           mkdir -p "$dir/bin" "$dir/share"
-          cp target/release/x360chatpad-daemon target/release/x360chatpad-tray "$dir/bin/"
+          cp target/release/x360truewireless-daemon target/release/x360truewireless-tray "$dir/bin/"
           cp -r packaging/* "$dir/share/"
           tar -czf "$dir.tar.gz" "$dir"
           sha256sum "$dir.tar.gz" > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes x360chatpad-x86_64-linux.tar.gz SHA256SUMS
+        # Tags with a suffix (v0.2.0-rc1) are pre-releases: the installer's default "latest"
+        # skips them, so they can be tried with X360TRUEWIRELESS_VERSION first.
+        run: |
+          pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--prerelease"
+          gh release create "$GITHUB_REF_NAME" $pre --generate-notes x360truewireless-x86_64-linux.tar.gz SHA256SUMS

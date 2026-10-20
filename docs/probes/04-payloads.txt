@@ -1,0 +1,16 @@
+# Family 2: packets with an 8-byte payload, like rumble (`00 01 0f c0` + payload).
+# Byte 1 may be the payload type (01 = rumble), so sweep it with a few payload guesses:
+#   A: rumble-shaped, 25% in both bytes
+#   B: the patent's effect-block layout: report 01, index 01, block control 01,
+#      effect type 01 (constant), duration ff (infinite), gain 80, no delay, 1 loop
+#   C: every byte 25%
+# About 2 minutes.
+say payload type sweep, A
+00 {02..1f} 0f c0 00 40 40 00 00 00 00 00
+say payload type sweep, B
+00 {02..1f} 0f c0 01 01 01 01 ff 80 00 01
+say payload type sweep, C
+00 {02..1f} 0f c0 40 40 40 40 40 40 40 40
+say rumble-type payload in other classes and commands (class 8 has power off, so skip it)
+00 01 {00..07} {c0..c3} 00 40 40 00 00 00 00 00
+00 01 {09..0e} {c0..c3} 00 40 40 00 00 00 00 00

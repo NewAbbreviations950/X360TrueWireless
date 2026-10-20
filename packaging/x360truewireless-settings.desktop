@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=X360 Chatpad Settings
+Name=X360TrueWireless Settings
 Comment=Remap the Xbox 360 chatpad and check controller status
-Exec=@BIN_DIR@/x360chatpad-tray --settings
-Icon=x360chatpad
+Exec=@BIN_DIR@/x360truewireless-tray --settings
+Icon=x360truewireless
 Terminal=false
 Categories=Settings;HardwareSettings;
 Keywords=xbox;360;chatpad;controller;keyboard;
-StartupWMClass=x360chatpad
+StartupWMClass=x360truewireless

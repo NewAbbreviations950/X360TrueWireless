@@ -3,7 +3,7 @@
 
 use resvg::{tiny_skia, usvg};
 
-const TRAY_SVG: &str = include_str!("../../../packaging/icons/x360chatpad-tray-symbolic.svg");
+const TRAY_SVG: &str = include_str!("../../../packaging/icons/x360truewireless-tray-symbolic.svg");
 /// The colour the SVG's stylesheet uses for `currentColor`; replaced with the panel's text colour.
 const SVG_TEXT_COLOR: &str = "#232629";
 const SIZES: [u32; 5] = [16, 22, 32, 48, 64];

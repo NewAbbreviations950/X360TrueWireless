@@ -1,0 +1,17 @@
+# Directional force, try 1: class 0b (the motor class) with an 8-byte payload, like rumble.
+# Rig: no weight. The script sets a weak spring first, so the rim rests where it's left and
+# any sideways force turns it. Keep hands off the rim. About 1 minute.
+#   P1: the patent's effect-block layout (constant force, infinite, gain 80, 1 loop)
+#   P2: rumble-shaped, 25% in both bytes
+#   P3: every byte 25%
+stop 00 00 0b 02
+say motor on, weak spring
+00 00 0b 04
+00 00 0b 48
+wait 1000
+say P1
+00 01 0b {00..3f} 01 01 01 01 ff 80 00 01
+say P2
+00 01 0b {00..3f} 00 40 40 00 00 00 00 00
+say P3
+00 01 0b {00..3f} 40 40 40 40 40 40 40 40

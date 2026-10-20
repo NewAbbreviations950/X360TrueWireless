@@ -1,4 +1,4 @@
-//! User settings in `~/.config/x360chatpad/config.toml`. Every field is optional:
+//! User settings in `~/.config/x360truewireless/config.toml`. Every field is optional:
 //!
 //! ```toml
 //! # Keyboard layout the chatpad should type for. Detected from the desktop if unset.
@@ -10,6 +10,9 @@
 //! # an evdev key name such as "KEY_F5", or "" to disable the key.
 //! [keys.green]
 //! E = "KEY_F5"
+//!
+//! # How a racing wheel shows up: "logitech" (default), "thrustmaster" or "controller".
+//! wheel_mode = "controller"
 //! ```
 
 use std::path::PathBuf;
@@ -25,13 +28,33 @@ pub struct Config {
     pub layout: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variant: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wheel_mode: Option<WheelMode>,
     #[serde(skip_serializing_if = "Overrides::is_empty")]
     pub keys: Overrides,
 }
 
+/// How a racing wheel shows up to games.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WheelMode {
+    /// A Logitech G920 with force feedback, so games with a G920 profile (most racing games
+    /// that know any wheel) set it up themselves.
+    #[default]
+    Logitech,
+    /// A Thrustmaster TMX with force feedback, for games with a TMX profile but none for the
+    /// G920. (Pre-releases had a generic wheel instead, called `generic`, `wheel` or
+    /// `joystick`.)
+    #[serde(alias = "generic", alias = "wheel", alias = "joystick")]
+    Thrustmaster,
+    /// An Xbox 360 pad, for games without wheel support: steering on the left stick, rumble,
+    /// and the wheel's own autocentre.
+    Controller,
+}
+
 impl Config {
     pub fn path() -> Option<PathBuf> {
-        Some(config_dir()?.join("x360chatpad/config.toml"))
+        Some(config_dir()?.join("x360truewireless/config.toml"))
     }
 
     /// Load the config. A missing file gives the defaults; a broken one is an error.
@@ -83,8 +106,20 @@ mod tests {
         let config: Config = toml::from_str(text).unwrap();
         assert_eq!(config.layout.as_deref(), Some("no"));
         assert_eq!(config.keys[&Layer::Green]["E"], "KEY_F5");
+        assert_eq!(config.wheel_mode, None);
         let back: Config = toml::from_str(&toml::to_string_pretty(&config).unwrap()).unwrap();
         assert_eq!(back, config);
+    }
+
+    #[test]
+    fn wheel_mode() {
+        let config: Config = toml::from_str("wheel_mode = \"controller\"").unwrap();
+        assert_eq!(config.wheel_mode, Some(WheelMode::Controller));
+        let config: Config = toml::from_str("wheel_mode = \"joystick\"").unwrap();
+        assert_eq!(config.wheel_mode, Some(WheelMode::Thrustmaster));
+        let config: Config = toml::from_str("wheel_mode = \"logitech\"").unwrap();
+        assert_eq!(config.wheel_mode, Some(WheelMode::Logitech));
+        assert!(toml::from_str::<Config>("wheel_mode = \"gamepad\"").is_err());
     }
 
     #[test]

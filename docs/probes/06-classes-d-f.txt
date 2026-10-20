@@ -1,0 +1,10 @@
+# Header-only commands in classes d-f, which the 2026-10-14 session didn't reach (classes 9
+# and 0a stopped input reports first, so they're left out). Weak spring, no weight, as in
+# 05. About 4 minutes.
+stop 00 00 0b 02
+say motor on, weak spring
+00 00 0b 04
+00 00 0b 48
+wait 1000
+say class d-f
+00 00 {0d..0f} {00..ff}

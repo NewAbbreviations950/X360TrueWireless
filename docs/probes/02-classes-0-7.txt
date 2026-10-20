@@ -1,0 +1,5 @@
+# Family 1: header-only commands in the unused classes 0-7 (`00 00 0N xx`). About 10 minutes.
+say class 0-3
+00 00 {00..03} {00..ff}
+say class 4-7
+00 00 {04..07} {00..ff}

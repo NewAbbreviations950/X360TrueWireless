@@ -1,0 +1,8 @@
+# Family 1: header-only commands in class 8 (`00 00 08 xx`), the class that holds the ring
+# LED (`4x`) and power off (`c0`). Both are skipped. About 4 minutes.
+say class 8, 00-3f
+00 00 08 {00..3f}
+say class 8, 50-bf
+00 00 08 {50..bf}
+say class 8, c1-ff
+00 00 08 {c1..ff}

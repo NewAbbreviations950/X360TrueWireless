@@ -1,6 +1,6 @@
 [package]
-name = "x360chatpad-daemon"
-version = "0.1.0"
+name = "x360truewireless-daemon"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -11,7 +11,7 @@ libc = "0.2.190"
 nusb = "0.2.7"
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"
-x360chatpad-common = { version = "0.1.0", path = "../common" }
-x360chatpad-proto = { version = "0.1.0", path = "../proto" }
+x360truewireless-common = { version = "0.2.0", path = "../common" }
+x360truewireless-proto = { version = "0.2.0", path = "../proto" }
 xkbcommon-dl = "0.4.2"
 zbus = "5.19.0"

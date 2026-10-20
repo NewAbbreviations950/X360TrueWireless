@@ -7,7 +7,7 @@
 
 use std::time::{Duration, Instant};
 
-use x360chatpad_proto::led;
+use x360truewireless_proto::led;
 
 /// Minimum gap between attempts, so a chatpad that ignores us isn't flooded.
 const RETRY_INTERVAL: Duration = Duration::from_millis(250);

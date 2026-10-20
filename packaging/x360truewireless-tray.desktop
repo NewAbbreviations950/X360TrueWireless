@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=X360 Chatpad Tray
+Name=X360TrueWireless Tray
 Comment=Tray icon for the Xbox 360 chatpad driver
-Exec=@BIN_DIR@/x360chatpad-tray
-Icon=x360chatpad
+Exec=@BIN_DIR@/x360truewireless-tray
+Icon=x360truewireless
 Terminal=false
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
