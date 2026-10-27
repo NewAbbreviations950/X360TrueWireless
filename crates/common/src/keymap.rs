@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::str::FromStr;
 
-use evdev::KeyCode;
+use crate::keycode::KeyCode;
 use serde::{Deserialize, Serialize};
 use x360truewireless_proto::ChatpadKey;
 

@@ -3,6 +3,7 @@
 
 pub mod config;
 pub mod dbus;
+pub mod keycode;
 pub mod keymap;
 
 pub use x360truewireless_proto::{Battery, ChatpadKey};

@@ -88,6 +88,16 @@ impl Config {
     }
 }
 
+/// Where config.toml's folder goes: `~/.config` (or `$XDG_CONFIG_HOME`) on Linux, the roaming
+/// app data folder on Windows.
+#[cfg(windows)]
+pub fn config_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA")
+        .filter(|v| !v.is_empty())
+        .map(Into::into)
+}
+
+#[cfg(not(windows))]
 pub fn config_dir() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .filter(|v| !v.is_empty())

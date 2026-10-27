@@ -1,4 +1,5 @@
-//! D-Bus names shared by the daemon and the tray/settings app (session bus).
+//! D-Bus names shared by the daemon and the tray/settings app (the session bus on Linux; on
+//! Windows, peer-to-peer connections over the Unix socket at [`socket_path`]).
 //!
 //! Methods: `Reload()` re-reads config.toml and re-detects the keyboard layout;
 //! `Status() -> (layout: s, connected: ab)` gives the active layout and which of the four
@@ -11,6 +12,17 @@
 pub const BUS_NAME: &str = "io.github.NewAbbreviations950.X360TrueWireless";
 pub const OBJECT_PATH: &str = "/io/github/NewAbbreviations950/X360TrueWireless";
 pub const INTERFACE: &str = "io.github.NewAbbreviations950.X360TrueWireless1";
+
+/// Where the daemon listens on Windows: `%LOCALAPPDATA%\X360TrueWireless\daemon.sock`.
+#[cfg(windows)]
+pub fn socket_path() -> Option<std::path::PathBuf> {
+    let dir = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty())?;
+    Some(
+        std::path::PathBuf::from(dir)
+            .join("X360TrueWireless")
+            .join("daemon.sock"),
+    )
+}
 
 /// What a controller slot has connected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -9,7 +9,7 @@ use std::io::{self, Read, Write};
 use std::mem::size_of;
 use std::os::fd::AsRawFd;
 
-use evdev::KeyCode;
+use x360truewireless_common::keycode::KeyCode;
 
 const EV_SYN: u16 = 0x00;
 const EV_KEY: u16 = 0x01;

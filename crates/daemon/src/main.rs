@@ -1,17 +1,21 @@
 //! x360truewireless-daemon: takes an Xbox 360 Wireless Receiver over from xpad and exposes each
 //! controller as a virtual Xbox 360 pad, plus a shared virtual keyboard for chatpads.
 
-mod actions;
+// No console window on Windows; the log goes to a file (see `platform::init`).
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+mod chatpad;
 mod dbus;
 mod devices;
 mod ffb;
 mod indicators;
-mod keyboard;
 mod keymap;
 mod layout;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod pid;
+mod platform;
 mod wheel_ff;
 
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -24,13 +28,15 @@ use x360truewireless_common::config::WheelMode;
 use x360truewireless_common::dbus::SlotDevice;
 use x360truewireless_proto::{Battery, ChatpadEvent, Device, InPacket, out, parse};
 
-use devices::{ChatpadState, Pad, Wheel, WheelLayout};
-use keyboard::Keyboard;
+use chatpad::ChatpadState;
+use devices::{Pad, Wheel, WheelLayout};
 use keymap::Keymap;
 use layout::Layout;
+use platform::{Keyboard, actions, receiver};
+use x360truewireless_common::keycode::KeyCode;
 
 const RECEIVER_IDS: &[(u16, u16)] = &[(0x045e, 0x0719), (0x045e, 0x0291), (0x045e, 0x02a9)];
-const SLOTS: u8 = 4;
+pub(crate) const SLOTS: u8 = 4;
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(1);
 /// How long to wait for the device type after a connect before assuming a gamepad. The link
 /// info carrying it arrives within about 10 ms, but a controller that was already connected
@@ -94,8 +100,8 @@ struct Shared {
     battery: [AtomicU8; SLOTS as usize],
     /// What each slot has connected, as `SlotDevice` codes.
     devices: [AtomicU8; SLOTS as usize],
-    /// Session bus connection, if available, for status and key signals.
-    dbus: Option<zbus::blocking::Connection>,
+    /// The service the settings app talks to, for key signals.
+    dbus: dbus::Ipc,
     keyboard: Mutex<Keyboard>,
     /// System Caps Lock state, as mirrored onto our keyboard by the compositor.
     caps_lock: AtomicBool,
@@ -114,9 +120,7 @@ impl Shared {
     }
 
     fn key_pressed(&self, slot: u8, key: x360truewireless_proto::ChatpadKey) {
-        if let Some(conn) = &self.dbus {
-            dbus::emit_key(conn, slot, key);
-        }
+        self.dbus.emit_key(slot, key);
     }
 
     /// Re-read the config and re-detect the layout. Returns config problems, if any.
@@ -127,7 +131,7 @@ impl Shared {
         problems
     }
 
-    fn type_keys(&self, events: &[(evdev::KeyCode, bool)]) -> std::io::Result<()> {
+    fn type_keys(&self, events: &[(KeyCode, bool)]) -> std::io::Result<()> {
         if events.is_empty() {
             return Ok(());
         }
@@ -136,6 +140,10 @@ impl Shared {
 }
 
 fn main() -> Result<()> {
+    if !platform::init() {
+        eprintln!("the driver is already running");
+        return Ok(());
+    }
     let (keymap, wheel_mode, problems) = load_config();
     for p in problems {
         eprintln!("config: {p}");
@@ -175,7 +183,7 @@ fn main() -> Result<()> {
                     "receiver {:04x}:{:04x} at {}",
                     info.vendor_id(),
                     info.product_id(),
-                    info.sysfs_path().display()
+                    receiver::describe(&info)
                 );
                 if let Err(e) = run_receiver(&info, &shared) {
                     eprintln!("receiver stopped: {e:#}");
@@ -229,14 +237,14 @@ fn run_receiver(info: &DeviceInfo, shared: &Arc<Shared>) -> Result<()> {
     // Claim every slot before starting any, so a failure never leaves half a receiver running.
     let claimed = (0..SLOTS)
         .map(|slot| {
-            let iface = device.detach_and_claim_interface(slot * 2).wait();
+            let iface = receiver::claim(&device, slot * 2);
             iface.with_context(|| format!("claim interface {}", slot * 2))
         })
         .collect::<Result<Vec<_>>>();
     let claimed = match claimed {
         Ok(claimed) => claimed,
         Err(e) => {
-            restore_xpad(&device, info);
+            receiver::release(&device, info);
             return Err(e);
         }
     };
@@ -261,7 +269,7 @@ fn run_receiver(info: &DeviceInfo, shared: &Arc<Shared>) -> Result<()> {
                 if let Err(e) = &result {
                     eprintln!("slot {slot}: {e:#}");
                 }
-                // Dropping `iface` releases it and lets xpad have it back.
+                // Dropping `iface` releases it, so the system driver can have it back.
                 result
             })
         })
@@ -272,7 +280,7 @@ fn run_receiver(info: &DeviceInfo, shared: &Arc<Shared>) -> Result<()> {
             result = Err(e);
         }
     }
-    restore_xpad(&device, info);
+    receiver::release(&device, info);
     result
 }
 
@@ -401,6 +409,11 @@ fn run_slot(slot: u8, iface: &nusb::Interface, shared: &Shared) -> Result<()> {
                         }
                         InPacket::Chatpad(ChatpadEvent::Keys(keys)) => {
                             chatpad_seen = Some(Instant::now());
+                            if platform::layout::changed() {
+                                for p in shared.reload() {
+                                    eprintln!("config: {p}");
+                                }
+                            }
                             let out = chatpad.update(keys, &shared.keymap.read().unwrap());
                             shared.type_keys(&out.keys)?;
                             for key in &out.pressed {
@@ -617,7 +630,7 @@ fn new_controller(
                 }
             };
             Controller::Wheel(
-                Wheel::new(layout).context("create virtual wheel")?,
+                Wheel::new(slot, layout).context("create virtual wheel")?,
                 wheel_ff::Encoder::new(),
             )
         }
@@ -655,53 +668,6 @@ fn send(ep: &mut Endpoint<Interrupt, Out>, packet: &out::Packet) -> Result<()> {
             Ok(())
         }
     }
-}
-
-fn info_still_present(info: &DeviceInfo) -> bool {
-    info.sysfs_path().exists()
-}
-
-/// Hand every controller interface back to xpad. xpad's probe occasionally fails right after
-/// a release, so check each interface actually got a driver and retry a few times.
-fn restore_xpad(device: &nusb::Device, info: &DeviceInfo) {
-    let sysfs = info.sysfs_path();
-    let name = sysfs
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default();
-    for slot in 0..SLOTS {
-        let iface = slot * 2;
-        let driver_link = sysfs.join(format!("{name}:1.{iface}/driver"));
-        let mut last_err = None;
-        for attempt in 0..5 {
-            if has_driver(&driver_link) {
-                break;
-            }
-            if attempt > 0 {
-                thread::sleep(Duration::from_millis(200));
-            }
-            if let Err(e) = device.attach_kernel_driver(iface) {
-                last_err = Some(e);
-            }
-        }
-        if !has_driver(&driver_link) && info_still_present(info) {
-            match last_err {
-                Some(e) => eprintln!(
-                    "warning: could not give interface {iface} back to xpad after 5 attempts: {e}"
-                ),
-                None => eprintln!(
-                    "warning: could not give interface {iface} back to xpad after 5 attempts"
-                ),
-            }
-        }
-    }
-}
-
-/// True only when the interface is bound to xpad. Any driver would do for a plain existence
-/// check, but while we still hold the interface its link points at usbfs, which would make
-/// the handback think it had already succeeded.
-fn has_driver(link: &Path) -> bool {
-    std::fs::read_link(link).is_ok_and(|target| target.file_name() == Some("xpad".as_ref()))
 }
 
 fn sleep_while_running(shared: &Shared, total: Duration) {

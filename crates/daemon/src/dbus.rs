@@ -1,10 +1,13 @@
-//! The daemon's D-Bus service on the session bus (names in `x360truewireless_common::dbus`), used
-//! by the tray/settings app.
+//! The daemon's D-Bus service (names in `x360truewireless_common::dbus`), used by the
+//! tray/settings app. On Linux it's on the session bus; Windows has no bus, so there each
+//! client connects to a Unix socket and gets a peer-to-peer connection with the same object.
 
-use std::sync::Weak;
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, Weak};
 
-use x360truewireless_common::dbus::{BUS_NAME, INTERFACE, OBJECT_PATH};
+#[cfg(target_os = "linux")]
+use x360truewireless_common::dbus::BUS_NAME;
+use x360truewireless_common::dbus::{INTERFACE, OBJECT_PATH};
 use x360truewireless_proto::ChatpadKey;
 
 use crate::Shared;
@@ -80,28 +83,89 @@ impl Service {
     }
 }
 
+/// The connections clients reach the service through, for signals.
+#[derive(Clone, Default)]
+pub struct Ipc {
+    conns: Arc<Mutex<Vec<zbus::blocking::Connection>>>,
+}
+
+impl Ipc {
+    pub fn emit_key(&self, slot: u8, key: ChatpadKey) {
+        // A connection whose client has gone fails to send; drop it.
+        self.conns.lock().unwrap().retain(|conn| {
+            conn.emit_signal(
+                None::<&str>,
+                OBJECT_PATH,
+                INTERFACE,
+                "ChatpadKey",
+                &(slot, key.name()),
+            )
+            .is_ok()
+        });
+    }
+}
+
 /// Start the service. Without a session bus (or if another daemon owns the name) we carry on
 /// without it; only the settings app needs it.
-pub fn serve(shared: Weak<Shared>) -> Option<zbus::blocking::Connection> {
+#[cfg(target_os = "linux")]
+pub fn serve(shared: Weak<Shared>) -> Ipc {
+    let ipc = Ipc::default();
     let conn = zbus::blocking::connection::Builder::session()
         .and_then(|b| b.name(BUS_NAME))
         .and_then(|b| b.serve_at(OBJECT_PATH, Service { shared }))
         .and_then(|b| b.build());
     match conn {
-        Ok(conn) => Some(conn),
+        Ok(conn) => ipc.conns.lock().unwrap().push(conn),
         Err(e) => {
-            eprintln!("D-Bus service unavailable ({e}); the settings app won't be able to connect");
-            None
+            eprintln!("D-Bus service unavailable ({e}); the settings app won't be able to connect")
         }
     }
+    ipc
 }
 
-pub fn emit_key(conn: &zbus::blocking::Connection, slot: u8, key: ChatpadKey) {
-    let _ = conn.emit_signal(
-        None::<&str>,
-        OBJECT_PATH,
-        INTERFACE,
-        "ChatpadKey",
-        &(slot, key.name()),
-    );
+/// Start the service: listen on the socket and serve each client that connects.
+#[cfg(windows)]
+pub fn serve(shared: Weak<Shared>) -> Ipc {
+    let ipc = Ipc::default();
+    let Some(path) = x360truewireless_common::dbus::socket_path() else {
+        eprintln!("no local app data folder; the settings app won't be able to connect");
+        return ipc;
+    };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    // A socket file left over from a previous run would make the bind fail.
+    let _ = std::fs::remove_file(&path);
+    let listener = match uds_windows::UnixListener::bind(&path) {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!(
+                "can't listen on {} ({e}); the settings app won't be able to connect",
+                path.display()
+            );
+            return ipc;
+        }
+    };
+    let conns = ipc.conns.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let conn = stream.map_err(zbus::Error::from).and_then(|stream| {
+                zbus::blocking::connection::Builder::async_io_unix_stream(stream)
+                    .server(zbus::Guid::generate())?
+                    .p2p()
+                    .serve_at(
+                        OBJECT_PATH,
+                        Service {
+                            shared: shared.clone(),
+                        },
+                    )?
+                    .build()
+            });
+            match conn {
+                Ok(conn) => conns.lock().unwrap().push(conn),
+                Err(e) => eprintln!("settings app connection failed: {e}"),
+            }
+        }
+    });
+    ipc
 }

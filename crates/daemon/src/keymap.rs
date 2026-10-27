@@ -2,7 +2,7 @@
 //! `x360truewireless_common::keymap`) turned into key presses through the user's keyboard layout
 //! (see `layout.rs`).
 
-use evdev::KeyCode;
+use x360truewireless_common::keycode::KeyCode;
 use x360truewireless_common::keymap::{KeyTable, Output};
 use x360truewireless_proto::ChatpadKey;
 
@@ -35,6 +35,9 @@ impl Keymap {
         let mut combo = match self.table.output(layer, key)? {
             Output::Char(c) => match self.layout.resolve(c) {
                 Some(combo) => combo.clone(),
+                #[cfg(windows)]
+                None => Combo::text(c)?,
+                #[cfg(not(windows))]
                 None => {
                     eprintln!(
                         "{c:?} can't be typed with keyboard layout {}",

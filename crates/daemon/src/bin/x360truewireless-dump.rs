@@ -42,7 +42,7 @@ fn main() -> Result<()> {
         "found receiver {:04x}:{:04x} on bus {} addr {}",
         info.vendor_id(),
         info.product_id(),
-        info.busnum(),
+        info.bus_id(),
         info.device_address()
     );
     let device = info
@@ -58,10 +58,13 @@ fn main() -> Result<()> {
 
     let result = run(&device, &running);
     // Give every controller interface back to xpad, even ones a crashed earlier run left orphaned.
-    for slot in 0..SLOTS {
-        let _ = device.attach_kernel_driver(slot * 2);
+    #[cfg(target_os = "linux")]
+    {
+        for slot in 0..SLOTS {
+            let _ = device.attach_kernel_driver(slot * 2);
+        }
+        println!("released interfaces; xpad reattached");
     }
-    println!("released interfaces; xpad reattached");
     result
 }
 
