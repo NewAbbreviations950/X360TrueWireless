@@ -47,7 +47,6 @@ reload_udev() {
 
 install_files() {
     local src="$1"   # directory containing bin/ and share/
-    migrate_old_install
     say "Installing binaries to $BIN_DIR"
     install -Dm755 "$src/bin/x360truewireless-daemon" "$BIN_DIR/x360truewireless-daemon"
     install -Dm755 "$src/bin/x360truewireless-tray" "$BIN_DIR/x360truewireless-tray"
@@ -78,30 +77,6 @@ install_files() {
     start_tray
     say "Done. x360truewireless is running and will start automatically when you log in."
     say "Logs: journalctl --user -u $UNIT -f"
-}
-
-# The project used to be called x360chatpad. Remove that install (service, binaries, menu
-# entries, icons, udev rule) and move its settings, so updating from it needs no manual steps.
-migrate_old_install() {
-    local old_unit="$UNIT_DIR/x360chatpad.service" old_rule="/etc/udev/rules.d/70-x360chatpad.rules"
-    local old_config="${XDG_CONFIG_HOME:-$HOME/.config}/x360chatpad"
-    local new_config="${XDG_CONFIG_HOME:-$HOME/.config}/x360truewireless"
-    [ -e "$old_unit" ] || [ -e "$BIN_DIR/x360chatpad-daemon" ] || [ -e "$old_rule" ] || [ -d "$old_config" ] || return 0
-    say "Replacing the old x360chatpad install"
-    systemctl --user disable --now x360chatpad.service 2>/dev/null || true
-    pkill -f "$BIN_DIR/x360chatpad-tray" 2>/dev/null || true
-    rm -f "$old_unit" "$BIN_DIR/x360chatpad-daemon" "$BIN_DIR/x360chatpad-tray" \
-        "$APPS_DIR/x360chatpad-settings.desktop" "$AUTOSTART_DIR/x360chatpad-tray.desktop" \
-        "$ICON_DIR/x360chatpad.svg" "$ICON_DIR/x360chatpad-tray-symbolic.svg"
-    systemctl --user daemon-reload
-    if [ -d "$old_config" ] && [ ! -e "$new_config" ]; then
-        say "Moving your settings to $new_config"
-        mv "$old_config" "$new_config"
-    fi
-    # The new rule is installed next; this only removes the old one.
-    if [ -f "$old_rule" ]; then
-        as_root rm -f "$old_rule"
-    fi
 }
 
 # Process names are cut to 15 characters ("x360truewireles" for both binaries), so match the
