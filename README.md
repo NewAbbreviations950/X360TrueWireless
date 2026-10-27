@@ -37,9 +37,6 @@ curl -fsSL https://raw.githubusercontent.com/NewAbbreviations950/X360TrueWireles
 
 From a checkout, `./install.sh --local` builds and installs the working tree (needs Rust).
 
-This project used to be called x360chatpad. The installer replaces an install under the old
-name (service, udev rule and menu entries) and keeps your settings.
-
 ## Windows (beta)
 
 Download `X360TrueWireless-Setup-x86_64.exe` from the
