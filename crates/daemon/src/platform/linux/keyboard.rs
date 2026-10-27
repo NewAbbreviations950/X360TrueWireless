@@ -14,6 +14,7 @@ use x360truewireless_common::keycode::KeyCode;
 const EV_SYN: u16 = 0x00;
 const EV_KEY: u16 = 0x01;
 const EV_LED: u16 = 0x11;
+const EV_REP: u16 = 0x14;
 const SYN_REPORT: u16 = 0;
 const LED_CAPSL: u16 = 0x01;
 const BUS_VIRTUAL: u16 = 0x06;
@@ -82,6 +83,9 @@ impl Keyboard {
         }
         ioctl(UI_SET_EVBIT, EV_LED as _)?;
         ioctl(UI_SET_LEDBIT, LED_CAPSL as _)?;
+        // Held keys repeat for programs reading the device directly (the console, some
+        // games). Desktops ignore the kernel's repeats and repeat keys themselves.
+        ioctl(UI_SET_EVBIT, EV_REP as _)?;
 
         let mut setup = UinputSetup {
             id: InputId {
