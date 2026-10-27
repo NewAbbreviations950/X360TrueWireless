@@ -34,6 +34,9 @@ pub enum Direction {
     Polar(f32),
     /// The X component's sign is all that matters for a wheel.
     Cartesian { x: i16 },
+    /// No direction (the report doesn't enable it): the effect works on the axes it enables,
+    /// in the direction of its own sign.
+    Axes { x: bool },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,6 +153,7 @@ impl Translator {
                 let along = match direction {
                     Direction::Polar(turns) => (turns * TAU).sin(),
                     Direction::Cartesian { x } => x.signum() as f32,
+                    Direction::Axes { x } => f32::from(u8::from(x)),
                 };
                 self.effects.entry(index).or_default().report = Some((
                     kind,
@@ -402,6 +406,26 @@ mod tests {
             panic!("{effect:?}")
         };
         assert!((force + 0.5).abs() < 1e-3, "{force}");
+    }
+
+    #[test]
+    fn constant_force_without_a_direction_keeps_its_sign() {
+        let mut t = Translator::default();
+        t.report(Report::Constant {
+            index: 1,
+            magnitude: -4000,
+        });
+        let ops = t.report(Report::Effect {
+            direction: Direction::Axes { x: true },
+            ..effect_report(1, EffectType::Constant, 0.0)
+        });
+        let Some(Op::Upload { effect, .. }) = ops.last() else {
+            panic!("{ops:?}")
+        };
+        let Kind::Constant { force, .. } = effect.kind else {
+            panic!("{effect:?}")
+        };
+        assert!((force + 0.4).abs() < 1e-3, "{force}");
     }
 
     #[test]

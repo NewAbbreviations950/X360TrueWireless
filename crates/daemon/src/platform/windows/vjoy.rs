@@ -20,6 +20,10 @@ pub const HID_USAGE_RZ: u32 = 0x35;
 /// Axis values run 0..=AXIS_MAX.
 pub const AXIS_MAX: i32 = 0x7fff;
 
+// The effect report's AxesEnabledDirection bits.
+const X_AXIS_ENABLE: u8 = 0x01;
+const DIRECTION_ENABLE: u8 = 0x04;
+
 const VJD_STAT_OWN: u32 = 0;
 const VJD_STAT_FREE: u32 = 1;
 
@@ -306,6 +310,13 @@ fn api_unchecked() -> &'static Api {
     api().expect("vJoy loaded before a device was acquired")
 }
 
+/// Whether to log games' force-feedback requests (X360TRUEWIRELESS_FF_LOG=1, as for the
+/// driver's own log of them).
+fn ff_log() -> bool {
+    static LOG: OnceLock<bool> = OnceLock::new();
+    *LOG.get_or_init(|| std::env::var_os("X360TRUEWIRELESS_FF_LOG").is_some())
+}
+
 /// vJoy's force-feedback callback, on vJoy's own thread.
 unsafe extern "system" fn on_ffb(data: *const FfbData, _: *mut c_void) {
     let Ok(api) = api() else { return };
@@ -344,6 +355,17 @@ unsafe fn decode(api: &Api, data: *const FfbData) -> Option<Report> {
             if unsafe { (api.ffb_report)(data, &mut r) } != 0 {
                 return None;
             }
+            if ff_log() {
+                eprintln!(
+                    "vJoy effect {}: type {}, axes/direction {:#04x}, polar {}, direction {} {}",
+                    r.effect_block_index,
+                    r.effect_type,
+                    r.axes_enabled_direction,
+                    r.polar,
+                    r.direction,
+                    r.dir_y
+                );
+            }
             Report::Effect {
                 index: r.effect_block_index,
                 kind: match r.effect_type {
@@ -363,7 +385,13 @@ unsafe fn decode(api: &Api, data: *const FfbData) -> Option<Report> {
                 duration_ms: (r.duration != 0xffff).then_some(r.duration),
                 start_delay_ms: r.start_delay,
                 gain: r.gain,
-                direction: if r.polar != 0 {
+                // Without the direction bit, the effect works on the enabled axes, signed by
+                // its own magnitude.
+                direction: if r.axes_enabled_direction & DIRECTION_ENABLE == 0 {
+                    Direction::Axes {
+                        x: r.axes_enabled_direction & X_AXIS_ENABLE != 0,
+                    }
+                } else if r.polar != 0 {
                     Direction::Polar(r.direction as f32 / 32768.0)
                 } else {
                     Direction::Cartesian {
