@@ -118,6 +118,12 @@ const SPECIAL_KEYS: &[(&str, &str)] = &[
 ];
 
 const APP_ID: &str = "x360truewireless";
+/// The release's version, set from its tag by the release workflow (so pre-releases show
+/// theirs too); Cargo.toml's otherwise.
+const VERSION: &str = match option_env!("X360TRUEWIRELESS_VERSION") {
+    Some(v) => v,
+    None => env!("CARGO_PKG_VERSION"),
+};
 
 /// Top-down pictures of a controller, without and with its chatpad, traced from photos taken
 /// straight down on one (the outline averaged with its mirror image; buttons and keys measured
@@ -865,7 +871,7 @@ impl Settings {
         });
         ui.add_space(14.0);
         ui.label(
-            egui::RichText::new(format!("Version {}", env!("CARGO_PKG_VERSION")))
+            egui::RichText::new(format!("Version {VERSION}"))
                 .color(p.weak_text)
                 .small(),
         );
