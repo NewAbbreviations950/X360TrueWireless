@@ -16,7 +16,7 @@ pub use linux::{restart_driver, run};
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub use windows::{restart_driver, run};
+pub use windows::{restart_driver, run, setup_receiver};
 
 /// What the tray shows.
 #[derive(Default)]

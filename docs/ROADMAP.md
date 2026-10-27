@@ -51,6 +51,33 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
   Kubuntu, Deck desktop mode and X11. Check that the popup is placed next to the tray.
 - **Release build size:** the tray binary is about 12 MB, and could be trimmed if that matters.
 
+- **Windows port: test on the Windows laptop** (code on the `windows-port` branch, built and
+  tested by CI on Windows; nothing has run on Windows yet). Linux-only code is behind
+  `crates/daemon/src/platform/` and the tray's `tray/` module. Decisions: pads through
+  ViGEmBus, chatpad typing with `SendInput` (scancodes through the focused window's layout,
+  text for characters it lacks), the wheel as a vJoy joystick with force feedback (HID PID
+  reports → `ffb::Op` in `pid.rs`, then the existing encoder), the tray↔driver link as D-Bus
+  peer to peer over a Unix socket, and an Inno Setup installer. Spoofing a G920/TMX identity
+  as on Linux would need our own signed kernel driver (paid EV certificate + Microsoft
+  attestation), so games that only accept known wheels (SnowRunner) won't see the vJoy wheel.
+  WinUSB goes on the receiver through `packaging/windows/receiver-driver.ps1` (Zadig's method
+  with built-in tools: a local certificate, a signed catalog, a forced driver update), since
+  building libwdi's `wdi-simple` needs the old WDK 8 redistributables. To check, in order:
+  1. The CI build's `x360truewireless-dump.exe` with WinUSB put on the receiver by Zadig:
+     all four interfaces claim and packets flow (nusb with WinUSB on the whole device).
+  2. `receiver-driver.ps1` as administrator: the self-signed catalog is accepted and the
+     forced update replaces Windows' Xbox driver; `-Uninstall` gives it back.
+  3. Pads in `joy.cpl` and Steam, rumble, the player LED, Guide+A quick menu.
+  4. Chatpad typing on the laptop's layout and after switching layout (AltGr chords, dead
+     keys, text fallback), the Caps light (`GetKeyState` from a background thread).
+  5. Tray: icon colour, menu, popup placement, settings saving, the socket link
+     (`ChatpadKey` signals for the key picker), low-battery toast.
+  6. Installer: ViGEmBus silent switches (`/exenoui /qn`), vJoy (`/VERYSILENT`),
+     `vJoyConfig` creating devices 1–4 with force feedback, autostart, upgrade, uninstall.
+  7. Wheel: shows in `joy.cpl` with force feedback; DiRT 4 and Wreckfest natively; check
+     the force direction (`CONSTANT_SIGN` and `pid.rs`'s polar angle).
+  Later: winget, code signing, an `.ico` for the setup.
+
 ## Later
 - **Steam controller list at startup:** if the pad already exists when Steam starts, Steam
   uses it but may not list it in Settings → Controller. It does list it once it's hotplugged
@@ -87,31 +114,6 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
   them. A compose/Unicode fallback could cover the rest.
 - **Packaging extras:** aarch64 builds, AUR/OBS packages, maybe a Flatpak for the GUI only.
 - **Power off controller** from the tray or popup (`00 00 08 c0`); needs a D-Bus method.
-- **Windows port** (the user has a Windows laptop to test on). The packet parsing
-  (`proto`), the force-feedback encoder (`wheel_ff`), the keymap and the config are
-  portable, and `nusb` runs on Windows over WinUSB. Steps, in order:
-  1. **Split out the Linux-only parts** behind a common layer: virtual devices (uinput),
-     chatpad keyboard output (xkbcommon layouts), the receiver handover (`xpad`), and the
-     tray↔daemon link (D-Bus). This changes nothing on Linux.
-  2. **First milestone, a plain `.exe` run by hand:** take the receiver over through WinUSB
-     (switched with Zadig at first), virtual Xbox pads through ViGEmBus (signed, no longer
-     maintained but working; Rust client available), and chatpad typing with `SendInput`
-     (Unicode, so no layout handling).
-  3. **Racing wheel:** a virtual DirectInput joystick with force feedback through vJoy
-     (signed, passes games' effects to the program), mapped onto `ffb::Op` and the existing
-     encoder. A virtual force-feedback device of our own would need a kernel driver and paid
-     signing, so it's out. Check vJoy's force-feedback support with a few games, since it
-     differs between versions.
-  4. **Tray and settings:** egui already runs on Windows; the tray icon needs a Windows
-     library, and the link to the daemon becomes a named pipe (or one process).
-  5. **`X360TrueWireless-Setup.exe`** (Inno Setup or WiX), built by the release workflow on a
-     Windows runner next to the Linux download. It installs the app, autostart and an
-     uninstaller, assigns WinUSB to the receiver (one admin prompt; the driver package needs a
-     locally created certificate like Zadig's, or a paid one), and installs ViGEmBus and vJoy.
-     Without a code-signing certificate, SmartScreen warns about the setup at first. Later:
-     winget.
-  - Swapping the receiver to WinUSB turns off Windows' own Xbox support for it, so the
-    program has to cover everything, as it does on Linux.
 - **Racing wheel force feedback** (Xbox 360 Wireless Racing Wheel, WRW01). Games' effects
   are passed to the wheel through the receiver.
   - Done: a `p` probe command in `x360truewireless-dump` with sweep scripts (`docs/probes/`).

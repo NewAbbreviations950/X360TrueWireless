@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  linux:
     # Oldest supported runner, so the binary's glibc requirement stays low enough for
     # SteamOS and older distros.
     runs-on: ubuntu-22.04
@@ -21,13 +21,57 @@ jobs:
           mkdir -p "$dir/bin" "$dir/share"
           cp target/release/x360truewireless-daemon target/release/x360truewireless-tray "$dir/bin/"
           cp -r packaging/* "$dir/share/"
+          rm -r "$dir/share/windows"
           tar -czf "$dir.tar.gz" "$dir"
-          sha256sum "$dir.tar.gz" > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: x360truewireless-x86_64-linux.tar.gz
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo build --release --locked -p x360truewireless-daemon -p x360truewireless-tray
+      - name: Stage the programs and the prerequisite installers
+        shell: bash
+        # Pinned prerequisites, checked against the hashes of the files that were tested.
+        run: |
+          mkdir stage
+          cp target/release/x360truewireless-daemon.exe target/release/x360truewireless-tray.exe stage/
+          cd stage
+          curl -fsSLO https://github.com/nefarius/ViGEmBus/releases/download/v1.22.0/ViGEmBus_1.22.0_x64_x86_arm64.exe
+          curl -fsSLO https://github.com/BrunnerInnovation/vJoy/releases/download/v2.2.2.0/vJoySetup_v2.2.2.0_Win10_Win11.exe
+          sha256sum -c - <<'EOF'
+          89220a7865076b342892f98865f3499fb7c4cfd673159e89d352c360fd014c6a  ViGEmBus_1.22.0_x64_x86_arm64.exe
+          ef569a3105cd301b89580f18f60c66b339e95296acf2c0dfcaf4b4bbf8ab68fe  vJoySetup_v2.2.2.0_Win10_Win11.exe
+          EOF
+      - name: Build the installer
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cd packaging/windows
+          "/c/Program Files (x86)/Inno Setup 6/iscc.exe" "/DAppVersion=$version" "/DStage=$GITHUB_WORKSPACE\\stage" x360truewireless.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: packaging/windows/X360TrueWireless-Setup-x86_64.exe
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         # Tags with a suffix (v0.2.0-rc1) are pre-releases: the installer's default "latest"
         # skips them, so they can be tried with X360TRUEWIRELESS_VERSION first.
         run: |
+          sha256sum x360truewireless-x86_64-linux.tar.gz X360TrueWireless-Setup-x86_64.exe > SHA256SUMS
           pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--prerelease"
-          gh release create "$GITHUB_REF_NAME" $pre --generate-notes x360truewireless-x86_64-linux.tar.gz SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" $pre --generate-notes --repo "$GITHUB_REPOSITORY" \
+            x360truewireless-x86_64-linux.tar.gz X360TrueWireless-Setup-x86_64.exe SHA256SUMS

@@ -14,3 +14,21 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal -c clippy
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      # A build to try on Windows by hand, before a release.
+      - run: cargo build --release --locked -p x360truewireless-daemon -p x360truewireless-tray
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-exes
+          path: |
+            target/release/x360truewireless-daemon.exe
+            target/release/x360truewireless-tray.exe
+            target/release/x360truewireless-dump.exe
+            packaging/windows/receiver-driver.ps1

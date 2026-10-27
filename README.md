@@ -1,7 +1,7 @@
 # X360TrueWireless
 
-Full support for Xbox 360 wireless accessories on Linux through the official Xbox 360
-Wireless Receiver: controllers **with their chatpad**, and the **Wireless Racing Wheel with
+Full support for Xbox 360 wireless accessories on Linux and Windows through the official
+Xbox 360 Wireless Receiver: controllers **with their chatpad**, and the **Wireless Racing Wheel with
 force feedback**. It works on any desktop distro and on the Steam Deck, and it plays nicely
 with Steam Input.
 
@@ -39,6 +39,43 @@ From a checkout, `./install.sh --local` builds and installs the working tree (ne
 
 This project used to be called x360chatpad. The installer replaces an install under the old
 name (service, udev rule and menu entries) and keeps your settings.
+
+## Windows (beta)
+
+Download `X360TrueWireless-Setup-x86_64.exe` from the
+[latest release](https://github.com/NewAbbreviations950/X360TrueWireless/releases) and run it
+(Windows 10 1809 or later, 64-bit). Plug the receiver in first. Windows SmartScreen warns about
+the setup because it isn't code-signed; choose "More info", then "Run anyway".
+
+The setup installs:
+
+- the driver and the tray app, both started at every sign-in;
+- [ViGEmBus](https://github.com/nefarius/ViGEmBus) for the virtual Xbox 360 pads, and
+  [vJoy](https://github.com/BrunnerInnovation/vJoy) for virtual racing wheels with force
+  feedback, unless they're already installed. vJoy devices 1–4 are set up as wheels;
+- Windows' WinUSB driver on the receiver, in place of Windows' own Xbox driver, the way
+  [Zadig](https://zadig.akeo.ie/) does it: a driver package signed with a certificate made on
+  your PC (its private key is deleted right after) and trusted on your PC only.
+
+Windows binds the receiver per USB port, so if you move it to another port, open
+**Set up receiver** from the Start menu or the tray menu.
+
+Differences from Linux:
+
+- The chatpad types through the keyboard layout of the window in front, and switches with
+  it. Characters the layout has no key for are typed as text.
+- Windows doesn't let programs type into apps running as administrator.
+- The racing wheel is a vJoy joystick (`1234:BEAD`), not a Logitech or Thrustmaster wheel:
+  making up another wheel's identity on Windows needs a kernel driver with a paid signature.
+  Games that bind any DirectInput wheel work, with force feedback; games that only accept
+  wheels they know (SnowRunner, for one) won't list it. The "Xbox controller" wheel mode works
+  everywhere.
+- Logs are in `%LOCALAPPDATA%\X360TrueWireless\daemon.log`, and the config file is
+  `%APPDATA%\x360truewireless\config.toml` (its `layout` setting is ignored).
+
+Uninstalling (Settings → Apps) gives the receiver back to Windows' Xbox driver. ViGEmBus and
+vJoy stay installed, since other programs use them too; remove them from Settings → Apps if
+you don't need them.
 
 ## Using the chatpad
 
@@ -145,6 +182,11 @@ the tray menu, or run `systemctl --user restart x360truewireless`.
 
 - `cargo test --workspace` runs packet-parsing, keymap and layout tests.
 - Crates: `proto` (USB packets), `common` (config, keymap, D-Bus names), `daemon`, `tray`.
+  What differs between Linux and Windows lives in `crates/daemon/src/platform/` and in the
+  tray's `tray/` module. `rustup target add x86_64-pc-windows-gnu`, then
+  `cargo clippy --workspace --target x86_64-pc-windows-gnu`, checks the Windows side from
+  Linux; CI builds and tests it on Windows. The installer is
+  `packaging/windows/x360truewireless.iss` (Inno Setup).
 - `x360truewireless-dump` (built with the daemon) hex-dumps receiver traffic and sends packets
   typed on stdin. It's useful for protocol work; stop the service first.
 - Protocol notes: [docs/protocol.md](docs/protocol.md). Status and plans: [docs/ROADMAP.md](docs/ROADMAP.md)

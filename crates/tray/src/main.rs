@@ -28,6 +28,11 @@ fn main() -> anyhow::Result<()> {
                 Ok(())
             }
         },
+        #[cfg(windows)]
+        Some("--setup-receiver") => {
+            tray::setup_receiver();
+            Ok(())
+        }
         Some(other) => anyhow::bail!("unknown argument {other:?} (expected --settings)"),
     }
 }
