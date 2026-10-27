@@ -49,6 +49,9 @@ jobs:
           EOF
       - name: Build the installer
         shell: bash
+        # Git Bash would otherwise rewrite iscc's /D switches as paths.
+        env:
+          MSYS_NO_PATHCONV: "1"
         run: |
           version="${GITHUB_REF_NAME#v}"
           cd packaging/windows
