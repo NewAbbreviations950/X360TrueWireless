@@ -108,7 +108,7 @@ pub fn watch_status(
     let latest = Arc::new(Mutex::new(Status::default()));
     let shared = latest.clone();
     thread::spawn(move || {
-        let client = Client::new();
+        let mut client = Client::new();
         let mut first = true;
         loop {
             let status = client.status();
@@ -117,6 +117,11 @@ pub fn watch_status(
                 *shared.lock().unwrap() = status.clone();
                 on_change(&status);
                 first = false;
+            }
+            // On Windows the connection is to the driver itself: it isn't there when the
+            // driver starts after this, and ends when the driver restarts. Connect again.
+            if cfg!(windows) && status.running.is_none() {
+                client = Client::new();
             }
             thread::sleep(interval);
         }

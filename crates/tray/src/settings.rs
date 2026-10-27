@@ -1069,14 +1069,15 @@ fn back_button(ui: &mut egui::Ui, rect: Rect, p: &Palette) -> egui::Response {
     if response.hovered() {
         painter.circle_filled(rect.center(), 14.0, p.button);
     }
-    let c = rect.center() + egui::vec2(-1.5, 0.0);
+    // Centred on the hover circle, like the close button's cross.
+    let c = rect.center();
     let stroke = Stroke::new(1.8, p.weak_text);
     painter.line_segment(
-        [c + egui::vec2(4.0, -6.0), c + egui::vec2(-2.0, 0.0)],
+        [c + egui::vec2(3.0, -6.0), c + egui::vec2(-3.0, 0.0)],
         stroke,
     );
     painter.line_segment(
-        [c + egui::vec2(-2.0, 0.0), c + egui::vec2(4.0, 6.0)],
+        [c + egui::vec2(-3.0, 0.0), c + egui::vec2(3.0, 6.0)],
         stroke,
     );
     response.on_hover_text("Back")

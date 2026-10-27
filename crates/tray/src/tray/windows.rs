@@ -98,6 +98,79 @@ pub fn restart_driver() {
     }
 }
 
+/// Show the icon on the taskbar itself rather than in the overflow menu, or put it back.
+/// Windows 11 keeps that choice per program under NotifyIconSettings (undocumented, and
+/// missing on Windows 10, where this does nothing); Explorer applies changes right away.
+fn promote_icon(promote: bool) {
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_SET_VALUE, REG_DWORD, RRF_RT_REG_SZ, RegCloseKey,
+        RegEnumKeyExW, RegGetValueW, RegOpenKeyExW, RegSetKeyValueW,
+    };
+    let Some(name) = std::env::current_exe()
+        .ok()
+        .and_then(|e| Some(format!("\\{}", e.file_name()?.to_str()?.to_lowercase())))
+    else {
+        return;
+    };
+    let settings = wide(r"Control Panel\NotifyIconSettings");
+    let (path_value, promoted_value) = (wide("ExecutablePath"), wide("IsPromoted"));
+    let data = u32::from(promote);
+    // SAFETY: null-terminated names, buffers passed with their sizes, and the key is closed
+    // below.
+    unsafe {
+        let mut key: HKEY = std::ptr::null_mut();
+        let access = KEY_READ | KEY_SET_VALUE;
+        if RegOpenKeyExW(HKEY_CURRENT_USER, settings.as_ptr(), 0, access, &mut key) != 0 {
+            return;
+        }
+        for index in 0.. {
+            // Each subkey is one icon, named by a number.
+            let mut subkey = [0u16; 64];
+            let mut len = subkey.len() as u32;
+            if RegEnumKeyExW(
+                key,
+                index,
+                subkey.as_mut_ptr(),
+                &mut len,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ) != 0
+            {
+                break;
+            }
+            // The program's path, starting with a known folder's id, such as Program Files'.
+            let mut path = [0u16; 1024];
+            let mut size = size_of_val(&path) as u32;
+            if RegGetValueW(
+                key,
+                subkey.as_ptr(),
+                path_value.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                path.as_mut_ptr().cast(),
+                &mut size,
+            ) != 0
+            {
+                continue;
+            }
+            let path = String::from_utf16_lossy(&path[..size as usize / 2]);
+            if path.trim_end_matches('\0').to_lowercase().ends_with(&name) {
+                RegSetKeyValueW(
+                    key,
+                    subkey.as_ptr(),
+                    promoted_value.as_ptr(),
+                    REG_DWORD,
+                    (&data as *const u32).cast(),
+                    size_of::<u32>() as u32,
+                );
+            }
+        }
+        RegCloseKey(key);
+    }
+}
+
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain([0]).collect()
 }
@@ -200,6 +273,8 @@ pub fn run() -> anyhow::Result<()> {
             tray.status = status;
             let _ = icon.set_tooltip(Some(tray.tool_tip_text()));
             icon.set_menu(Some(Box::new(menu(&tray))));
+            let connected = tray.status.running.as_ref();
+            promote_icon(connected.is_some_and(|s| s.connected.contains(&true)));
         }
         while let Ok(event) = MenuEvent::receiver().try_recv() {
             match event.id.0.as_str() {
