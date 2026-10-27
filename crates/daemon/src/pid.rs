@@ -416,8 +416,12 @@ mod tests {
             magnitude: -4000,
         });
         let ops = t.report(Report::Effect {
+            index: 1,
+            kind: EffectType::Constant,
+            duration_ms: None,
+            start_delay_ms: 0,
+            gain: 255,
             direction: Direction::Axes { x: true },
-            ..effect_report(1, EffectType::Constant, 0.0)
         });
         let Some(Op::Upload { effect, .. }) = ops.last() else {
             panic!("{ops:?}")
