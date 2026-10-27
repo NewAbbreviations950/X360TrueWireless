@@ -325,10 +325,22 @@ unsafe extern "system" fn on_ffb(data: *const FfbData, _: *mut c_void) {
     if unsafe { (api.ffb_device_id)(data, &mut device) } != 0 {
         return;
     }
+    if ff_log() {
+        // SAFETY: as above; `size` counts the 8-byte header before the report's bytes.
+        let raw = unsafe {
+            let d = &*data;
+            let len = (d.size as usize).saturating_sub(8).min(64);
+            std::slice::from_raw_parts(d.data, if d.data.is_null() { 0 } else { len })
+        };
+        eprintln!("vJoy raw {device}: {raw:02x?}");
+    }
     // SAFETY: as above.
     let Some(report) = (unsafe { decode(api, data) }) else {
         return;
     };
+    if ff_log() {
+        eprintln!("vJoy {report:?}");
+    }
     if let Some(route) = routes().lock().unwrap().get(&device) {
         let _ = route.send(report);
     }
