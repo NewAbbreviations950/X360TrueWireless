@@ -100,6 +100,8 @@ begin
     '', SW_HIDE, ewWaitUntilTerminated, Code);
   if Code = 2 then
     MsgBox('The receiver isn''t plugged in. Plug it in, then open "Set up receiver" from the Start menu.', mbInformation, MB_OK)
+  else if Code = 3 then
+    MsgBox('Unplug the receiver and plug it back into the same USB port to finish setting it up.', mbInformation, MB_OK)
   else if Code <> 0 then
     MsgBox('Setting up the receiver failed (code ' + IntToStr(Code) + '). Try "Set up receiver" from the Start menu.', mbError, MB_OK);
 

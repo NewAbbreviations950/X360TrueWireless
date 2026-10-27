@@ -148,6 +148,11 @@ pub fn setup_receiver() {
             "No receiver is plugged in. Plug it in and try again.",
             MB_OK | MB_ICONINFORMATION,
         ),
+        // The daemon retries on its own once the receiver is replugged.
+        3 => message(
+            "Unplug the receiver and plug it back into the same USB port to finish.",
+            MB_OK | MB_ICONINFORMATION,
+        ),
         _ => message(
             &format!("Setting up the receiver failed (code {code})."),
             MB_OK | MB_ICONERROR,

@@ -8,7 +8,8 @@ is trusted on this PC only, and its private key is deleted right after signing, 
 sign anything else. Windows ranks its own Xbox driver higher, so the update is forced.
 
 Exit codes: 0 done, 2 the package is installed but no receiver is plugged in (plug it in and
-run this again), 1 failed.
+run this again), 3 done but Windows' Xbox driver still holds the receiver until it's unplugged
+and plugged back in, 1 failed.
 #>
 param([switch]$Uninstall)
 
@@ -31,10 +32,11 @@ public static class NewDev {
 '@
 
 function Remove-Certificates {
+    # -DeleteKey only exists for Cert: paths, so it can't bind to piped input: pass the path.
     foreach ($store in 'Root', 'TrustedPublisher', 'My') {
         Get-ChildItem "Cert:\LocalMachine\$store" |
             Where-Object Subject -eq $Subject |
-            Remove-Item -DeleteKey -ErrorAction SilentlyContinue
+            ForEach-Object { Remove-Item -LiteralPath $_.PSPath -DeleteKey -ErrorAction SilentlyContinue }
     }
 }
 
@@ -127,10 +129,12 @@ DeviceName = "Xbox 360 Wireless Receiver (X360TrueWireless)"
 
     # INSTALLFLAG_FORCE: use it even though Windows' Xbox driver ranks higher.
     $installed = $false
+    $replug = $false
     foreach ($id in $HardwareIds) {
         $reboot = $false
         if ([NewDev]::UpdateDriverForPlugAndPlayDevices([IntPtr]::Zero, $id, $Inf, 1, [ref]$reboot)) {
             $installed = $true
+            $replug = $replug -or $reboot
             Write-Output "WinUSB is now the driver for $id"
         }
     }
@@ -138,9 +142,15 @@ DeviceName = "Xbox 360 Wireless Receiver (X360TrueWireless)"
         Write-Output 'No receiver is plugged in. Plug it in, then run "Set up receiver" again.'
         exit 2
     }
+    # Windows asks for a restart when its Xbox driver won't let go; replugging is enough.
+    if ($replug) {
+        Write-Output 'Unplug the receiver and plug it back in to finish.'
+        exit 3
+    }
     exit 0
 }
 catch {
-    Write-Error $_
+    # Continue, or with ErrorActionPreference Stop this would throw instead of reporting.
+    Write-Error $_ -ErrorAction Continue
     exit 1
 }
