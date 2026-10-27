@@ -89,7 +89,7 @@ const BUTTONS: &[u16] = &[
     button::GUIDE,
 ];
 
-/// A racing wheel as vJoy device `slot + 1`: steering on X, throttle on Y and brake on Z
+/// A racing wheel as the first free vJoy device: steering on X, throttle on Y and brake on Z
 /// rotation (both 0 when released), the D-pad as a hat, and force feedback. vJoy has one
 /// identity whatever the mode, so both wheel layouts look the same here.
 pub struct Wheel {
@@ -100,10 +100,10 @@ pub struct Wheel {
 }
 
 impl Wheel {
-    pub fn new(slot: u8, layout: WheelLayout) -> io::Result<Self> {
+    pub fn new(_slot: u8, layout: WheelLayout) -> io::Result<Self> {
         let (tx, rx) = mpsc::channel();
         Ok(Wheel {
-            dev: vjoy::Device::acquire(slot as u32 + 1, tx)?,
+            dev: vjoy::Device::acquire_free(tx)?,
             layout,
             ffb: rx,
             translator: pid::Translator::default(),

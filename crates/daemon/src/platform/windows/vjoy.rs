@@ -227,6 +227,24 @@ pub struct Device {
 }
 
 impl Device {
+    /// Acquire the lowest-numbered free vJoy device. Games that use one wheel take the first
+    /// joystick Windows lists, so a lone wheel has to be device 1 whichever player it is.
+    pub fn acquire_free(ffb: Sender<Report>) -> io::Result<Device> {
+        // One wheel at a time, so two connecting together don't pick the same device.
+        static PICKING: Mutex<()> = Mutex::new(());
+        let _picking = PICKING.lock().unwrap();
+        let api = api()?;
+        for id in 1..=16 {
+            // SAFETY: plain call into the loaded DLL.
+            if unsafe { (api.get_status)(id) } == VJD_STAT_FREE {
+                return Device::acquire(id, ffb);
+            }
+        }
+        Err(io::Error::other(
+            "no free vJoy device; close programs using vJoy, or re-run the installer",
+        ))
+    }
+
     /// Acquire vJoy device `id` (1–16), sending its force-feedback reports to `ffb`.
     pub fn acquire(id: u32, ffb: Sender<Report>) -> io::Result<Device> {
         let api = api()?;
