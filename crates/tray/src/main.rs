@@ -2,6 +2,9 @@
 //! settings window. The settings window runs as its own process because a GUI event loop can
 //! only be created once per process, and the tray must stay alive after it closes.
 
+// No console window on Windows.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod client;
 mod icon;
 mod placement;

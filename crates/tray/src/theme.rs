@@ -1,7 +1,8 @@
 //! Make the settings popup look at home: colours from the desktop (KDE colour scheme, or the
-//! freedesktop portal's light/dark preference and accent colour on GNOME and others) and the
-//! system UI font.
+//! freedesktop portal's light/dark preference and accent colour on GNOME and others; the app
+//! mode and accent colour on Windows) and the system UI font.
 
+#[cfg(target_os = "linux")]
 use std::process::Command;
 
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, Stroke};
@@ -23,6 +24,22 @@ pub struct Palette {
 }
 
 impl Palette {
+    #[cfg(windows)]
+    pub fn detect() -> Self {
+        let dark = personalize("AppsUseLightTheme") != Some(1);
+        let mut palette = Self::fallback(dark);
+        if let Some(accent) = accent_color() {
+            palette.accent = accent;
+        }
+        palette.accent_text = if luminance(palette.accent) > 0.55 {
+            Color32::BLACK
+        } else {
+            Color32::WHITE
+        };
+        palette
+    }
+
+    #[cfg(target_os = "linux")]
     pub fn detect() -> Self {
         let portal = portal_appearance();
         let dark = portal.as_ref().and_then(|p| p.dark).unwrap_or(true);
@@ -124,15 +141,27 @@ impl Palette {
     }
 }
 
-/// Use the desktop's UI font, keeping egui's bundled fonts as fallback for missing glyphs.
-pub fn load_system_font(ctx: &egui::Context) {
-    let path = Command::new("fc-match")
+/// The desktop's UI font file.
+#[cfg(target_os = "linux")]
+fn system_font() -> Option<String> {
+    Command::new("fc-match")
         .args(["-f", "%{file}", "sans-serif"])
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .filter(|p| !p.is_empty());
-    let Some(bytes) = path.and_then(|p| std::fs::read(p).ok()) else {
+        .filter(|p| !p.is_empty())
+}
+
+/// Segoe UI, Windows' UI font.
+#[cfg(windows)]
+fn system_font() -> Option<String> {
+    let windir = std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into());
+    Some(format!(r"{windir}\Fonts\segoeui.ttf"))
+}
+
+/// Use the desktop's UI font, keeping egui's bundled fonts as fallback for missing glyphs.
+pub fn load_system_font(ctx: &egui::Context) {
+    let Some(bytes) = system_font().and_then(|p| std::fs::read(p).ok()) else {
         return;
     };
     let mut fonts = FontDefinitions::default();
@@ -156,11 +185,58 @@ fn luminance(c: Color32) -> f32 {
     (0.299 * c.r() as f32 + 0.587 * c.g() as f32 + 0.114 * c.b() as f32) / 255.0
 }
 
+/// A DWORD from the current user's registry.
+#[cfg(windows)]
+fn registry_dword(key: &str, value: &str) -> Option<u32> {
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
+    let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let (key, value) = (wide(key), wide(value));
+    let mut data = 0u32;
+    let mut size = size_of::<u32>() as u32;
+    // SAFETY: null-terminated names, and `data` is the DWORD the flags ask for.
+    let status = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            key.as_ptr(),
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            std::ptr::null_mut(),
+            (&mut data as *mut u32).cast(),
+            &mut size,
+        )
+    };
+    (status == 0).then_some(data)
+}
+
+#[cfg(windows)]
+fn personalize(value: &str) -> Option<u32> {
+    registry_dword(
+        r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+        value,
+    )
+}
+
+/// Whether the taskbar is light (so the tray icon should be dark).
+#[cfg(windows)]
+pub fn light_taskbar() -> bool {
+    personalize("SystemUsesLightTheme") == Some(1)
+}
+
+/// The user's accent colour, stored as 0xAABBGGRR.
+#[cfg(windows)]
+fn accent_color() -> Option<Color32> {
+    let abgr = registry_dword(r"Software\Microsoft\Windows\DWM", "AccentColor")?;
+    let [r, g, b, _] = abgr.to_le_bytes();
+    Some(Color32::from_rgb(r, g, b))
+}
+
+#[cfg(target_os = "linux")]
 struct Appearance {
     dark: Option<bool>,
     accent: Option<Color32>,
 }
 
+#[cfg(target_os = "linux")]
 /// org.freedesktop.appearance from the settings portal (KDE, GNOME, and others).
 fn portal_appearance() -> Option<Appearance> {
     let conn = zbus::blocking::Connection::session().ok()?;
@@ -192,11 +268,13 @@ fn portal_appearance() -> Option<Appearance> {
     Some(Appearance { dark, accent })
 }
 
+#[cfg(target_os = "linux")]
 /// Colours from KDE's active colour scheme (~/.config/kdeglobals), if any.
 struct KdeColors {
     entries: Vec<(String, String, Color32)>,
 }
 
+#[cfg(target_os = "linux")]
 impl KdeColors {
     fn get(&self, section: &str, key: &str) -> Option<Color32> {
         self.entries
@@ -238,6 +316,7 @@ impl KdeColors {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn kde_colors() -> Option<KdeColors> {
     let path = x360truewireless_common::config::config_dir()?.join("kdeglobals");
     let text = std::fs::read_to_string(path).ok()?;

@@ -1,4 +1,5 @@
-//! Talking to x360truewireless-daemon over the session bus.
+//! Talking to x360truewireless-daemon: over the session bus on Linux, and on Windows over a
+//! peer-to-peer connection to the driver's socket.
 
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -28,10 +29,25 @@ pub struct Client {
 }
 
 impl Client {
+    #[cfg(target_os = "linux")]
     pub fn new() -> Self {
         let conn = zbus::blocking::Connection::session()
             .map_err(|e| eprintln!("no session bus: {e}"))
             .ok();
+        Client { conn }
+    }
+
+    /// Connect to the driver, if it's running.
+    #[cfg(windows)]
+    pub fn new() -> Self {
+        let conn = x360truewireless_common::dbus::socket_path()
+            .and_then(|path| uds_windows::UnixStream::connect(path).ok())
+            .and_then(|stream| {
+                zbus::blocking::connection::Builder::async_io_unix_stream(stream)
+                    .p2p()
+                    .build()
+                    .ok()
+            });
         Client { conn }
     }
 
@@ -110,6 +126,7 @@ pub fn watch_status(
 
 /// Call `on_key` for every chatpad key pressed on any controller (from the daemon's
 /// `ChatpadKey` signal). Re-subscribes if the daemon restarts.
+#[cfg(target_os = "linux")]
 pub fn watch_keys(on_key: impl Fn(u8, ChatpadKey) + Send + 'static) {
     thread::spawn(move || {
         loop {
@@ -119,6 +136,30 @@ pub fn watch_keys(on_key: impl Fn(u8, ChatpadKey) + Send + 'static) {
             {
                 for msg in signals {
                     if let Ok((slot, name)) = msg.body().deserialize::<(u8, String)>()
+                        && let Some(key) = ChatpadKey::from_name(&name)
+                    {
+                        on_key(slot, key);
+                    }
+                }
+            }
+            thread::sleep(Duration::from_secs(2));
+        }
+    });
+}
+
+/// Call `on_key` for every chatpad key pressed on any controller (from the daemon's
+/// `ChatpadKey` signal). Reconnects if the daemon restarts. A peer-to-peer connection gets
+/// every signal without subscribing, so they're read straight off it.
+#[cfg(windows)]
+pub fn watch_keys(on_key: impl Fn(u8, ChatpadKey) + Send + 'static) {
+    thread::spawn(move || {
+        loop {
+            if let Some(conn) = Client::new().conn {
+                for msg in zbus::blocking::MessageIterator::from(&conn).flatten() {
+                    let header = msg.header();
+                    if header.message_type() == zbus::message::Type::Signal
+                        && header.member().is_some_and(|m| m == "ChatpadKey")
+                        && let Ok((slot, name)) = msg.body().deserialize::<(u8, String)>()
                         && let Some(key) = ChatpadKey::from_name(&name)
                     {
                         on_key(slot, key);

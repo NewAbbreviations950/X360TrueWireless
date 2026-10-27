@@ -40,6 +40,7 @@ const MARGIN: f32 = 20.0;
 const HEADER: f32 = 28.0;
 
 /// The wheel modes offered, with their labels and explanations.
+#[cfg(target_os = "linux")]
 const WHEEL_MODES: &[(WheelMode, &str, &str)] = &[
     (
         WheelMode::Logitech,
@@ -53,6 +54,23 @@ const WHEEL_MODES: &[(WheelMode, &str, &str)] = &[
         "Thrustmaster TMX",
         "The same wheel shown as a Thrustmaster TMX, for games with a TMX profile but none \
          for the G920.",
+    ),
+    (
+        WheelMode::Controller,
+        "Xbox controller",
+        "An Xbox 360 controller, for games without wheel support: steering on the left \
+         stick, with rumble and the wheel's own centring.",
+    ),
+];
+
+/// On Windows the wheel is a vJoy joystick, which has one identity whatever the mode.
+#[cfg(windows)]
+const WHEEL_MODES: &[(WheelMode, &str, &str)] = &[
+    (
+        WheelMode::Logitech,
+        "Racing wheel",
+        "A force-feedback wheel (a vJoy device). Bind its steering, pedals and buttons in \
+         the game's controls.",
     ),
     (
         WheelMode::Controller,
@@ -197,6 +215,7 @@ struct Settings {
     edit: String,
     edit_error: Option<String>,
     /// Layout text being edited (custom layout).
+    #[cfg_attr(windows, allow(dead_code))]
     layout_edit: String,
     status: Arc<Mutex<Status>>,
     picked: Arc<Mutex<Option<ChatpadKey>>>,
@@ -483,6 +502,12 @@ impl Settings {
             }
             SlotDevice::Wheel => {
                 let current = self.config.wheel_mode.unwrap_or_default();
+                // Both wheel identities are the same vJoy wheel on Windows.
+                #[cfg(windows)]
+                let current = match current {
+                    WheelMode::Thrustmaster => WheelMode::Logitech,
+                    mode => mode,
+                };
                 let label = (WHEEL_MODES.iter())
                     .find(|(m, ..)| *m == current)
                     .map_or("", |(_, label, _)| label);
@@ -747,60 +772,78 @@ impl Settings {
     fn settings_ui(&mut self, ui: &mut egui::Ui) {
         let p = self.palette.clone();
         let status = self.status.lock().unwrap().clone();
-        ui.horizontal(|ui| {
-            ui.label("Keyboard layout");
-            let auto = self.config.layout.is_none();
-            let detected = status
-                .running
-                .as_ref()
-                .map(|s| s.layout.clone())
-                .unwrap_or_default();
-            let auto_label = if detected.is_empty() || !auto {
-                "Automatic".to_owned()
-            } else {
-                format!("Automatic ({detected})")
-            };
-            egui::ComboBox::from_id_salt("layout")
-                .selected_text(if auto {
-                    auto_label.clone()
+        #[cfg(target_os = "linux")]
+        {
+            ui.horizontal(|ui| {
+                ui.label("Keyboard layout");
+                let auto = self.config.layout.is_none();
+                let detected = status
+                    .running
+                    .as_ref()
+                    .map(|s| s.layout.clone())
+                    .unwrap_or_default();
+                let auto_label = if detected.is_empty() || !auto {
+                    "Automatic".to_owned()
                 } else {
-                    "Custom".into()
-                })
-                .show_ui(ui, |ui| {
-                    if ui.selectable_label(auto, &auto_label).clicked() && !auto {
-                        self.config.layout = None;
-                        self.config.variant = None;
-                        self.layout_edit.clear();
-                        self.save();
-                    }
-                    if ui.selectable_label(!auto, "Custom").clicked() && auto {
-                        self.layout_edit = if detected.is_empty() {
-                            "us".into()
-                        } else {
-                            detected.clone()
-                        };
+                    format!("Automatic ({detected})")
+                };
+                egui::ComboBox::from_id_salt("layout")
+                    .selected_text(if auto {
+                        auto_label.clone()
+                    } else {
+                        "Custom".into()
+                    })
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_label(auto, &auto_label).clicked() && !auto {
+                            self.config.layout = None;
+                            self.config.variant = None;
+                            self.layout_edit.clear();
+                            self.save();
+                        }
+                        if ui.selectable_label(!auto, "Custom").clicked() && auto {
+                            self.layout_edit = if detected.is_empty() {
+                                "us".into()
+                            } else {
+                                detected.clone()
+                            };
+                            self.apply_layout_edit();
+                        }
+                    });
+                if !auto {
+                    let field = ui.add(
+                        egui::TextEdit::singleline(&mut self.layout_edit)
+                            .desired_width(110.0)
+                            .hint_text("us, no, de(nodeadkeys)"),
+                    );
+                    if field.lost_focus() {
                         self.apply_layout_edit();
                     }
-                });
-            if !auto {
-                let field = ui.add(
-                    egui::TextEdit::singleline(&mut self.layout_edit)
-                        .desired_width(110.0)
-                        .hint_text("us, no, de(nodeadkeys)"),
-                );
-                if field.lost_focus() {
-                    self.apply_layout_edit();
                 }
-            }
-        });
-        ui.label(
-            egui::RichText::new(
-                "Chatpads type through this layout. Steam Deck game mode uses a US layout \
-                 whatever the desktop's is, so set yours here if it differs.",
-            )
-            .color(p.weak_text)
-            .small(),
-        );
+            });
+            ui.label(
+                egui::RichText::new(
+                    "Chatpads type through this layout. Steam Deck game mode uses a US layout \
+                     whatever the desktop's is, so set yours here if it differs.",
+                )
+                .color(p.weak_text)
+                .small(),
+            );
+        }
+        #[cfg(windows)]
+        {
+            let detected = status.running.as_ref().map(|s| s.layout.clone());
+            ui.horizontal(|ui| {
+                ui.label("Keyboard layout");
+                ui.label(detected.as_deref().unwrap_or("unknown"));
+            });
+            ui.label(
+                egui::RichText::new(
+                    "Chatpads type through the keyboard layout of the window you type into.",
+                )
+                .color(p.weak_text)
+                .small(),
+            );
+        }
         ui.add_space(14.0);
         ui.horizontal(|ui| {
             ui.label("Driver");
@@ -827,6 +870,7 @@ impl Settings {
     }
 
     /// Parse "layout" or "layout(variant)" from the layout field and save it.
+    #[cfg_attr(windows, allow(dead_code))]
     fn apply_layout_edit(&mut self) {
         let text = self.layout_edit.trim();
         let (layout, variant) = match text.split_once('(') {
