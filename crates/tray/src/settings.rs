@@ -323,16 +323,17 @@ impl Settings {
         });
     }
 
-    fn header_ui(&mut self, ui: &mut egui::Ui) {
+    /// The title row. Returns where the back button goes: it's added after the header's drag
+    /// area, so that it gets the clicks.
+    fn header_ui(&mut self, ui: &mut egui::Ui) -> Option<Rect> {
         let p = self.palette.clone();
         let running = self.status.lock().unwrap().running.is_some();
+        let mut back = None;
         ui.horizontal(|ui| {
             ui.set_min_height(HEADER);
             if self.page != Page::Slots {
                 let (rect, _) = ui.allocate_exact_size(egui::vec2(28.0, 28.0), Sense::hover());
-                if back_button(ui, rect, &p).clicked() {
-                    self.page = Page::Slots;
-                }
+                back = Some(rect);
             }
             let title = match self.page {
                 Page::Slots => "X360TrueWireless",
@@ -353,6 +354,7 @@ impl Settings {
                 );
             }
         });
+        back
     }
 
     /// The picture of a device (a wheel, a controller with a chatpad, or else a plain
@@ -963,7 +965,8 @@ impl eframe::App for Settings {
                 frame.show(ui, |ui| {
                     ui.set_min_size(ui.available_size());
                     // Drag the popup by its header.
-                    let header = ui.scope(|ui| self.header_ui(ui)).response;
+                    let scope = ui.scope(|ui| self.header_ui(ui));
+                    let (header, back) = (scope.response, scope.inner);
                     if ui
                         .interact(header.rect, ui.id().with("drag"), Sense::drag())
                         .drag_started()
@@ -971,6 +974,11 @@ impl eframe::App for Settings {
                         ui.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     }
                     // Added after the drag area so they get the clicks.
+                    if let Some(rect) = back
+                        && back_button(ui, rect, &p).clicked()
+                    {
+                        self.page = Page::Slots;
+                    }
                     let right = ui.max_rect().right();
                     let y = header.rect.center().y - 14.0;
                     let close = Rect::from_min_size(egui::pos2(right - 28.0, y), Vec2::splat(28.0));
