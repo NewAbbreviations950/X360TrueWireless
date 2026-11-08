@@ -62,6 +62,14 @@ script, no Flatpak) is summarised under "Architecture decisions" at the end.
 - **Steam controller list at startup:** if the pad already exists when Steam starts, Steam
   uses it but may not list it in Settings → Controller. It does list it once it's hotplugged
   while Steam runs. Check this again, especially when booting into Deck game mode.
+- **Decky plugin for Steam Deck game mode:** the tray and settings popup are desktop-only,
+  so in game mode there's no way to see the driver's status or change settings. A Decky
+  Loader plugin in the Quick Access menu could show the status, the connected players and
+  their batteries, and switch the racing wheel mode (G920/TMX/Xbox controller) and the
+  keyboard layout (game mode is US unless configured). It would talk to the daemon over
+  the existing D-Bus service (`Status`, `Reload`, `Battery`, plus a method to save config
+  changes); the plugin's Python backend has to connect to the `deck` user's session bus.
+  Target Decky v3 (v2.10 no longer loads in current Steam game mode).
 - **Use for the People light:** it's currently always off.
 - **Battery in the tray:** the popup header shows 4-segment bars per connected player, the
   tray tooltip lists each player's level, and the daemon's D-Bus `Battery` method and a
